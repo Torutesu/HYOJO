@@ -39,6 +39,12 @@ export async function buildApp() {
   });
   app.addHook("onClose", async () => { await store.close(); });
   app.get("/v1/audit-events", async () => ({ events: await store.listAuditEvents() }));
+  app.get("/v1/huddles", async (request, reply) => {
+    const principal = await principalFrom(request);
+    if (!principal) return reply.status(401).send({ error: "Authentication required" });
+    const huddles = (await store.listHuddles()).filter((huddle) => canAccessSpace(principal, huddle.spaceId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return { huddles: huddles.map((huddle) => ({ id: huddle.id, title: huddle.title, status: huddle.status, transcript: huddle.transcript, createdAt: huddle.createdAt })) };
+  });
   app.get("/v1/spaces/:spaceId/recording-policy", async (request, reply) => {
     const principal = await principalFrom(request); const { spaceId } = request.params as { spaceId: string };
     if (!principal || !canAccessSpace(principal, spaceId)) return reply.status(403).send({ error: "Space access denied" });

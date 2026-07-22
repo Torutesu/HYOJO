@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import type { Narration } from "@hyojo/domain";
-import { speak } from "../src/api";
+import { listHuddles, speak, type HuddleListItem } from "../src/api";
 
 const initial: Narration = {
   id: "morning", greeting: "おはよう、Toru。", title: "今、決めると前に進むことがひとつあります。",
@@ -15,6 +15,9 @@ export default function Home() {
   const [narration, setNarration] = useState(initial);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState("");
+  const [huddles, setHuddles] = useState<HuddleListItem[]>([]);
+
+  useEffect(() => { void listHuddles().then(({ huddles: items }) => setHuddles(items.slice(0, 3))).catch(() => {}); }, []);
 
   async function submit() {
     if (!draft.trim()) return;
@@ -36,6 +39,7 @@ export default function Home() {
         <Text style={styles.rationale}>{narration.surface.rationale}</Text>
         <View style={styles.actions}><Pressable onPress={() => router.push("/huddle")} style={styles.primary}><Text style={styles.primaryText}>{narration.surface.primaryLabel}</Text></Pressable><Pressable style={styles.secondary}><Text>{narration.surface.secondaryLabel}</Text></Pressable></View>
       </View>}
+      {huddles.length > 0 && <View style={styles.history}><Text style={styles.historyTitle}>最近のHuddle</Text>{huddles.map((huddle) => <Pressable key={huddle.id} onPress={() => router.push({ pathname: huddle.status === "completed" ? "/huddle/[id]/result" : "/huddle/[id]", params: { id: huddle.id } })} style={styles.historyRow}><View><Text style={styles.historyName}>{huddle.title}</Text><Text style={styles.historyMeta}>{huddle.transcript.state === "received" ? "記録を確認できます" : huddle.status === "completed" ? "文字起こしを処理中" : "進行中のHuddle"}</Text></View><Text style={styles.chevron}>›</Text></Pressable>)}</View>}
       <Text style={styles.status}>{status}</Text>
     </View>
     <View style={styles.speak}><TextInput value={draft} onChangeText={setDraft} placeholder="話す（宛先は要らない）" placeholderTextColor="#999" style={styles.input} multiline /><Pressable onPress={submit} style={styles.mic}><Text style={styles.micText}>送る</Text></Pressable></View>
@@ -43,5 +47,5 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  screen:{flex:1,backgroundColor:"#fff"},header:{height:56,paddingHorizontal:20,borderBottomWidth:1,borderBottomColor:"#E2E2DD",flexDirection:"row",alignItems:"center",justifyContent:"space-between"},meta:{fontSize:11,color:"#666"},brand:{fontSize:11,color:"#666",fontWeight:"600",letterSpacing:1},content:{padding:20,gap:16},greeting:{fontSize:16},title:{fontSize:20,lineHeight:31,fontWeight:"500"},card:{borderWidth:1,borderColor:"#C8C8C4",borderRadius:12,padding:16,gap:8},decision:{backgroundColor:"#F4FAF6",borderColor:"#D7E8DD"},cardLabel:{fontSize:10,color:"#0F6E56",fontWeight:"600"},cardTitle:{fontSize:14,lineHeight:23},rationale:{fontSize:12,lineHeight:19,color:"#555"},actions:{flexDirection:"row",gap:8,marginTop:4},primary:{backgroundColor:"#1A1A1A",borderRadius:7,paddingHorizontal:12,paddingVertical:10},primaryText:{color:"#fff",fontSize:12},secondary:{borderWidth:1,borderColor:"#B8B8B4",borderRadius:7,paddingHorizontal:12,paddingVertical:10},status:{fontSize:11,color:"#666"},speak:{margin:16,borderWidth:1,borderColor:"#D0D0CC",borderRadius:10,backgroundColor:"#FAFAF8",padding:8,flexDirection:"row",alignItems:"center"},input:{flex:1,minHeight:38,fontSize:13,paddingHorizontal:8},mic:{backgroundColor:"#1A1A1A",borderRadius:7,paddingHorizontal:12,paddingVertical:11},micText:{color:"#fff",fontSize:11}
+  screen:{flex:1,backgroundColor:"#fff"},header:{height:56,paddingHorizontal:20,borderBottomWidth:1,borderBottomColor:"#E2E2DD",flexDirection:"row",alignItems:"center",justifyContent:"space-between"},meta:{fontSize:11,color:"#666"},brand:{fontSize:11,color:"#666",fontWeight:"600",letterSpacing:1},content:{padding:20,gap:16},greeting:{fontSize:16},title:{fontSize:20,lineHeight:31,fontWeight:"500"},card:{borderWidth:1,borderColor:"#C8C8C4",borderRadius:12,padding:16,gap:8},decision:{backgroundColor:"#F4FAF6",borderColor:"#D7E8DD"},cardLabel:{fontSize:10,color:"#0F6E56",fontWeight:"600"},cardTitle:{fontSize:14,lineHeight:23},rationale:{fontSize:12,lineHeight:19,color:"#555"},actions:{flexDirection:"row",gap:8,marginTop:4},primary:{backgroundColor:"#1A1A1A",borderRadius:7,paddingHorizontal:12,paddingVertical:10},primaryText:{color:"#fff",fontSize:12},secondary:{borderWidth:1,borderColor:"#B8B8B4",borderRadius:7,paddingHorizontal:12,paddingVertical:10},history:{borderTopWidth:1,borderTopColor:"#E2E2DD",paddingTop:12,gap:2},historyTitle:{fontSize:11,fontWeight:"600",color:"#666",marginBottom:5},historyRow:{paddingVertical:10,flexDirection:"row",alignItems:"center",justifyContent:"space-between",borderBottomWidth:1,borderBottomColor:"#F0F0EC"},historyName:{fontSize:13,fontWeight:"500"},historyMeta:{fontSize:11,color:"#666",marginTop:4},chevron:{fontSize:22,color:"#888"},status:{fontSize:11,color:"#666"},speak:{margin:16,borderWidth:1,borderColor:"#D0D0CC",borderRadius:10,backgroundColor:"#FAFAF8",padding:8,flexDirection:"row",alignItems:"center"},input:{flex:1,minHeight:38,fontSize:13,paddingHorizontal:8},mic:{backgroundColor:"#1A1A1A",borderRadius:7,paddingHorizontal:12,paddingVertical:11},micText:{color:"#fff",fontSize:11}
 });

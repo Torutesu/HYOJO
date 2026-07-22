@@ -12,6 +12,8 @@ if (expiringPolicy.statusCode !== 200) throw new Error("Retention policy setup f
 const proposed = await app.inject({ method: "POST", url: "/v1/huddles", headers: { "x-hyojo-actor": "toru" }, payload: { title: "返金ポリシーを決める", participants: ["toru", "sarah"], spaceId: "product", recordingPolicy: "required" } });
 if (proposed.statusCode !== 201 || proposed.json().huddle.status !== "proposed") throw new Error("Huddle proposal failed");
 const huddleId = proposed.json().huddle.id;
+const listed = await app.inject({ method: "GET", url: "/v1/huddles", headers: { "x-hyojo-actor": "toru" } });
+if (listed.statusCode !== 200 || !listed.json().huddles.some((huddle: { id: string }) => huddle.id === huddleId)) throw new Error("Huddle list failed");
 const joined = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/join`, headers: { "x-hyojo-actor": "toru" } });
 if (joined.statusCode !== 200 || joined.json().huddle.recording.state !== "recording") throw new Error("Huddle recording start failed");
 const unavailableToken = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/token`, headers: { "x-hyojo-actor": "toru" } });

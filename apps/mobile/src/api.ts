@@ -40,3 +40,11 @@ export async function getHuddle(id: string) {
   if (!response.ok) throw new Error("Huddle could not be loaded");
   return response.json() as Promise<{ huddle: { title: string; transcript: { state: "not_requested" | "pending" | "received" } }; memory: { summary: string } | null }>;
 }
+
+export type HuddleListItem = { id: string; title: string; status: "proposed" | "active" | "completed" | "recording_off"; transcript: { state: "not_requested" | "pending" | "received" }; createdAt: string };
+
+export async function listHuddles() {
+  const response = await fetch(`${apiBaseUrl}/v1/huddles`, { headers: { "x-hyojo-actor": "toru" } });
+  if (!response.ok) throw new Error("Huddles could not be loaded");
+  return response.json() as Promise<{ huddles: HuddleListItem[] }>;
+}
