@@ -28,3 +28,15 @@ export async function getHuddleConnection(id: string) {
   if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "LiveKit connection failed");
   return response.json() as Promise<{ connection: { serverUrl: string; token: string } }>;
 }
+
+export async function completeHuddle(id: string) {
+  const response = await fetch(`${apiBaseUrl}/v1/huddles/${id}/complete`, { method: "POST", headers: { "x-hyojo-actor": "toru" } });
+  if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "Huddle completion failed");
+  return response.json() as Promise<{ huddle: { id: string }; memory: { summary: string } | null }>;
+}
+
+export async function getHuddle(id: string) {
+  const response = await fetch(`${apiBaseUrl}/v1/huddles/${id}`, { headers: { "x-hyojo-actor": "toru" } });
+  if (!response.ok) throw new Error("Huddle could not be loaded");
+  return response.json() as Promise<{ huddle: { title: string; transcript: { state: "not_requested" | "pending" | "received" } }; memory: { summary: string } | null }>;
+}

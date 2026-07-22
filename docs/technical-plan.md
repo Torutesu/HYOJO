@@ -39,3 +39,7 @@ RECORDING_S3_SECRET=...
 The local default provider is an in-memory recording seam for development and tests only. Production must set the LiveKit provider and object-storage credentials.
 
 The mobile client requests a 15-minute, room-scoped token from `POST /v1/huddles/:id/token` only after the server has accepted the Huddle join. `LIVEKIT_API_SECRET` stays on the API; it must never be exposed through `EXPO_PUBLIC_*` variables. LiveKit's React Native SDK requires an Expo development build, not Expo Go, because it uses native WebRTC modules. `apps/mobile/app.json` enables the official LiveKit and WebRTC config plugins; their WebRTC plugin is pinned to the Expo 54-compatible major version.
+
+## Transcript-to-memory boundary
+
+Ending a Huddle stops server-side recording immediately, but does not manufacture a summary. A transcript worker (or a Space admin in the prototype) submits `POST /v1/huddles/:id/transcript` only after completion; the endpoint creates the Institutional Memory record only when the Space permits indexing. Production workers authenticate with `HYOJO_TRANSCRIPT_INGEST_KEY`; the key is server-side only. Video is retained as evidence and is never supplied to the memory-generation input.

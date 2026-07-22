@@ -12,8 +12,10 @@ const joined = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/
 if (joined.statusCode !== 200 || joined.json().huddle.recording.state !== "recording") throw new Error("Huddle recording start failed");
 const unavailableToken = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/token`, headers: { "x-hyojo-actor": "toru" } });
 if (unavailableToken.statusCode !== 503 || !unavailableToken.json().error?.includes("LiveKit connection is not configured")) throw new Error("LiveKit configuration boundary failed");
-const completed = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/complete`, headers: { "x-hyojo-actor": "toru" }, payload: { transcript: "Sarah agrees to a full refund within 48 hours from checkout." } });
-if (completed.statusCode !== 200 || completed.json().memory?.source !== "transcript" || completed.json().huddle.recording.state !== "stopped") throw new Error("Huddle memory failed");
+const completed = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/complete`, headers: { "x-hyojo-actor": "toru" } });
+if (completed.statusCode !== 200 || completed.json().memory !== null || completed.json().huddle.recording.state !== "stopped") throw new Error("Huddle completion failed");
+const transcript = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/transcript`, headers: { "x-hyojo-actor": "toru" }, payload: { text: "Sarah agrees to a full refund within 48 hours from checkout.", language: "en" } });
+if (transcript.statusCode !== 200 || transcript.json().memory?.source !== "transcript" || transcript.json().huddle.transcript.state !== "received") throw new Error("Transcript memory ingestion failed");
 const forbidden = await app.inject({ method: "GET", url: "/v1/spaces/product/recording-policy", headers: { "x-hyojo-actor": "unknown" } });
 if (forbidden.statusCode !== 403) throw new Error("ACL boundary failed");
 console.log("Speak smoke test passed");

@@ -1,4 +1,4 @@
-export type AuditAction = "speak_received" | "routing_decided" | "surface_approved" | "huddle_recording_started";
+export type AuditAction = "speak_received" | "routing_decided" | "surface_approved" | "huddle_recording_started" | "huddle_completed" | "huddle_transcript_received";
 
 export type AuditEvent = {
   id: string;
@@ -38,6 +38,13 @@ export type SpeakResponse = { narration: Narration; auditEvents: AuditEvent[] };
 
 export type HuddleStatus = "proposed" | "active" | "completed" | "recording_off";
 
+export type HuddleTranscript = {
+  huddleId: string;
+  text: string;
+  language?: string;
+  receivedAt: string;
+};
+
 export type Huddle = {
   id: string;
   spaceId: string;
@@ -47,6 +54,7 @@ export type Huddle = {
   recordingPolicy: RecordingPolicy;
   recordingDisclosure: string;
   recording: { provider: "memory" | "livekit" | "none"; state: "not_started" | "recording" | "stopped"; externalId?: string };
+  transcript: { state: "not_requested" | "pending" | "received"; receivedAt?: string };
   createdAt: string;
 };
 

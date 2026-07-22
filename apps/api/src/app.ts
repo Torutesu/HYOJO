@@ -2,7 +2,7 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { z } from "zod";
 import { isAllowedSurface } from "@hyojo/adaptive-ui";
-import type { AuditEvent, Huddle, HuddleMemory, RecordingPolicy, SpeakResponse } from "@hyojo/domain";
+import type { AuditEvent, Huddle, HuddleMemory, HuddleTranscript, RecordingPolicy, SpeakResponse } from "@hyojo/domain";
 import { createRecordingProvider } from "./recording.js";
 import { canAccessSpace, principalFrom } from "./access.js";
 import { createLiveKitConnection } from "./livekit.js";
@@ -14,11 +14,17 @@ export async function buildApp() {
   const events: AuditEvent[] = [];
   const huddles = new Map<string, Huddle>();
   const memories = new Map<string, HuddleMemory>();
+  const transcripts = new Map<string, HuddleTranscript>();
   const spacePolicies = new Map<string, RecordingPolicy>([["product", { mode: "required", videoRetentionDays: 30, transcriptRetentionDays: 365, allowMemoryIndexing: true }]]);
   const recordingProvider = createRecordingProvider();
   const speakSchema = z.object({ text: z.string().trim().min(1).max(2_000), actorId: z.string().min(1) });
   const huddleSchema = z.object({ title: z.string().trim().min(1).max(160), participants: z.array(z.string().min(1)).min(1), spaceId: z.string().min(1), recordingPolicy: z.enum(["required", "optional", "off"]).default("required") });
-  const completeSchema = z.object({ transcript: z.string().trim().min(1).max(50_000) });
+  const transcriptSchema = z.object({ text: z.string().trim().min(1).max(50_000), language: z.string().trim().min(2).max(16).optional() });
+
+  function canIngestTranscript(request: { headers: Record<string, unknown> }) {
+    const ingestKey = process.env.HYOJO_TRANSCRIPT_INGEST_KEY;
+    return Boolean(ingestKey && request.headers["x-hyojo-ingest-key"] === ingestKey);
+  }
 
   app.get("/health", async () => ({ ok: true, service: "hyojo-api" }));
   app.get("/v1/audit-events", async () => ({ events }));
@@ -41,7 +47,7 @@ export async function buildApp() {
     const huddle = huddles.get(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
     const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
-    return { huddle, memory: memories.get(id) ?? null };
+    return { huddle, memory: memories.get(id) ?? null, transcript: transcripts.get(id) ? { state: "received", receivedAt: transcripts.get(id)!.receivedAt } : huddle.transcript };
   });
   app.post("/v1/huddles", async (request, reply) => {
     const parsed = huddleSchema.safeParse(request.body);
@@ -54,6 +60,7 @@ export async function buildApp() {
       status: policy.mode === "off" ? "recording_off" : "proposed", recordingPolicy: policy,
       recordingDisclosure: policy.mode === "off" ? "このハドルは記録されません。" : "録画・文字起こし中。参加者全員に表示されます。",
       recording: { provider: policy.mode === "off" ? "none" : recordingProvider.name, state: "not_started" },
+      transcript: { state: policy.mode === "off" ? "not_requested" : "pending" },
       createdAt: now
     };
     huddles.set(huddle.id, huddle);
@@ -94,14 +101,31 @@ export async function buildApp() {
     const huddle = huddles.get(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
     const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
-    const parsed = completeSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: "Invalid completion payload" });
+    if (huddle.status === "completed") return { huddle, memory: memories.get(id) ?? null };
     huddle.status = "completed";
     if (huddle.recording.state === "recording") { await recordingProvider.stop(huddle.recording.externalId); huddle.recording.state = "stopped"; }
-    // The summarizer seam deliberately receives transcript text only. Video stays evidence, not AI context.
-    const memory: HuddleMemory = { huddleId: id, summary: "Sarahが48時間案に合意。残る論点は返金起点です。", decisions: ["決済完了から48時間以内は全額返金"], todos: [{ owner: "AI", text: "CSマニュアルの更新依頼を送る" }], source: "transcript", createdAt: new Date().toISOString() };
-    if (huddle.recordingPolicy.allowMemoryIndexing) memories.set(id, memory);
-    return { huddle, memory: huddle.recordingPolicy.allowMemoryIndexing ? memory : null };
+    events.unshift({ id: crypto.randomUUID(), action: "huddle_completed", actorId: principal.id, occurredAt: new Date().toISOString(), reversible: false, metadata: { huddleId: id } });
+    return { huddle, memory: memories.get(id) ?? null };
+  });
+  app.post("/v1/huddles/:id/transcript", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const huddle = huddles.get(id);
+    if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
+    const principal = principalFrom(request);
+    const trustedIngest = canIngestTranscript(request);
+    if (!trustedIngest && (!principal || principal.role !== "admin" || !canAccessSpace(principal, huddle.spaceId))) return reply.status(403).send({ error: "Transcript ingest access denied" });
+    if (huddle.status !== "completed") return reply.status(409).send({ error: "Complete the Huddle before indexing its transcript" });
+    if (!huddle.recordingPolicy.allowMemoryIndexing) return reply.status(409).send({ error: "Institutional Memory indexing is disabled for this Space" });
+    const parsed = transcriptSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "Invalid transcript payload" });
+    const transcript: HuddleTranscript = { huddleId: id, text: parsed.data.text, language: parsed.data.language, receivedAt: new Date().toISOString() };
+    transcripts.set(id, transcript);
+    huddle.transcript = { state: "received", receivedAt: transcript.receivedAt };
+    // Video remains evidence. Only transcript text is allowed into the memory generation seam.
+    const memory: HuddleMemory = { huddleId: id, summary: transcript.text.slice(0, 500), decisions: [], todos: [], source: "transcript", createdAt: transcript.receivedAt };
+    memories.set(id, memory);
+    events.unshift({ id: crypto.randomUUID(), action: "huddle_transcript_received", actorId: trustedIngest ? "transcript-worker" : principal!.id, occurredAt: transcript.receivedAt, reversible: false, metadata: { huddleId: id, language: transcript.language ?? "und" } });
+    return { huddle, memory };
   });
   app.post("/v1/speak", async (request, reply) => {
     const parsed = speakSchema.safeParse(request.body);
