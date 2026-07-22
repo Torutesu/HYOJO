@@ -6,6 +6,7 @@
     "dev:api": "npm run dev --workspace=@hyojo/api",
     "dev:mobile": "npm run start --workspace=@hyojo/mobile",
     "dev:admin": "npm run dev --workspace=@hyojo/admin",
+    "db:migrate": "npm run migrate --workspace=@hyojo/api",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {

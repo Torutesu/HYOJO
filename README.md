@@ -18,4 +18,8 @@ npm run dev:api
 npm run dev:mobile
 ```
 
+## Durable local data
+
+Start Postgres with `docker compose up -d postgres`, then run `DATABASE_URL=postgres://hyojo:hyojo@localhost:5432/hyojo npm run db:migrate` before starting the API. With no `DATABASE_URL`, the prototype uses ephemeral in-memory data.
+
 See [technical plan](docs/technical-plan.md) for boundaries and phased implementation.

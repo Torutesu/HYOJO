@@ -6,16 +6,13 @@ import type { AuditEvent, Huddle, HuddleMemory, HuddleTranscript, RecordingPolic
 import { createRecordingProvider } from "./recording.js";
 import { canAccessSpace, principalFrom } from "./access.js";
 import { createLiveKitConnection } from "./livekit.js";
+import { createStore } from "./store.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
   await app.register(cors, { origin: true });
 
-  const events: AuditEvent[] = [];
-  const huddles = new Map<string, Huddle>();
-  const memories = new Map<string, HuddleMemory>();
-  const transcripts = new Map<string, HuddleTranscript>();
-  const spacePolicies = new Map<string, RecordingPolicy>([["product", { mode: "required", videoRetentionDays: 30, transcriptRetentionDays: 365, allowMemoryIndexing: true }]]);
+  const store = createStore();
   const recordingProvider = createRecordingProvider();
   const speakSchema = z.object({ text: z.string().trim().min(1).max(2_000), actorId: z.string().min(1) });
   const huddleSchema = z.object({ title: z.string().trim().min(1).max(160), participants: z.array(z.string().min(1)).min(1), spaceId: z.string().min(1), recordingPolicy: z.enum(["required", "optional", "off"]).default("required") });
@@ -27,34 +24,36 @@ export async function buildApp() {
   }
 
   app.get("/health", async () => ({ ok: true, service: "hyojo-api" }));
-  app.get("/v1/audit-events", async () => ({ events }));
+  app.addHook("onClose", async () => { await store.close(); });
+  app.get("/v1/audit-events", async () => ({ events: await store.listAuditEvents() }));
   app.get("/v1/spaces/:spaceId/recording-policy", async (request, reply) => {
     const principal = principalFrom(request); const { spaceId } = request.params as { spaceId: string };
     if (!principal || !canAccessSpace(principal, spaceId)) return reply.status(403).send({ error: "Space access denied" });
-    return { policy: spacePolicies.get(spaceId) ?? { mode: "optional", videoRetentionDays: 30, transcriptRetentionDays: 365, allowMemoryIndexing: true } };
+    return { policy: await store.getPolicy(spaceId) ?? { mode: "optional", videoRetentionDays: 30, transcriptRetentionDays: 365, allowMemoryIndexing: true } };
   });
   app.patch("/v1/spaces/:spaceId/recording-policy", async (request, reply) => {
     const principal = principalFrom(request); const { spaceId } = request.params as { spaceId: string };
     if (!principal || principal.role !== "admin" || !canAccessSpace(principal, spaceId)) return reply.status(403).send({ error: "Admin space access required" });
     const parsed = z.object({ mode: z.enum(["required", "optional", "off"]), videoRetentionDays: z.number().int().min(0).max(3650), transcriptRetentionDays: z.number().int().min(0).max(3650), allowMemoryIndexing: z.boolean() }).safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: "Invalid recording policy" });
-    spacePolicies.set(spaceId, parsed.data);
-    events.unshift({ id: crypto.randomUUID(), action: "routing_decided", actorId: principal.id, occurredAt: new Date().toISOString(), reversible: true, metadata: { operation: "recording_policy_changed", spaceId } });
+    await store.savePolicy(spaceId, parsed.data);
+    await store.addAuditEvent({ id: crypto.randomUUID(), action: "routing_decided", actorId: principal.id, occurredAt: new Date().toISOString(), reversible: true, metadata: { operation: "recording_policy_changed", spaceId } });
     return { policy: parsed.data };
   });
   app.get("/v1/huddles/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const huddle = huddles.get(id);
+    const huddle = await store.getHuddle(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
     const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
-    return { huddle, memory: memories.get(id) ?? null, transcript: transcripts.get(id) ? { state: "received", receivedAt: transcripts.get(id)!.receivedAt } : huddle.transcript };
+    const transcript = await store.getTranscript(id);
+    return { huddle, memory: await store.getMemory(id) ?? null, transcript: transcript ? { state: "received", receivedAt: transcript.receivedAt } : huddle.transcript };
   });
   app.post("/v1/huddles", async (request, reply) => {
     const parsed = huddleSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: "Invalid Huddle payload" });
     const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, parsed.data.spaceId)) return reply.status(403).send({ error: "Space access denied" });
     const now = new Date().toISOString();
-    const policy = spacePolicies.get(parsed.data.spaceId) ?? { mode: parsed.data.recordingPolicy, videoRetentionDays: 30, transcriptRetentionDays: 365, allowMemoryIndexing: parsed.data.recordingPolicy !== "off" };
+    const policy = await store.getPolicy(parsed.data.spaceId) ?? { mode: parsed.data.recordingPolicy, videoRetentionDays: 30, transcriptRetentionDays: 365, allowMemoryIndexing: parsed.data.recordingPolicy !== "off" };
     const huddle: Huddle = {
       id: crypto.randomUUID(), spaceId: parsed.data.spaceId, title: parsed.data.title, participants: parsed.data.participants,
       status: policy.mode === "off" ? "recording_off" : "proposed", recordingPolicy: policy,
@@ -63,13 +62,13 @@ export async function buildApp() {
       transcript: { state: policy.mode === "off" ? "not_requested" : "pending" },
       createdAt: now
     };
-    huddles.set(huddle.id, huddle);
-    events.unshift({ id: crypto.randomUUID(), action: "huddle_recording_started", actorId: "ai", occurredAt: now, reversible: true, metadata: { huddleId: huddle.id, recordingMode: policy.mode } });
+    await store.saveHuddle(huddle);
+    await store.addAuditEvent({ id: crypto.randomUUID(), action: "huddle_recording_started", actorId: "ai", occurredAt: now, reversible: true, metadata: { huddleId: huddle.id, recordingMode: policy.mode, spaceId: huddle.spaceId } });
     return reply.status(201).send({ huddle });
   });
   app.post("/v1/huddles/:id/join", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const huddle = huddles.get(id);
+    const huddle = await store.getHuddle(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
     const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
     if (huddle.status === "proposed" && huddle.recordingPolicy.mode !== "off") {
@@ -81,11 +80,12 @@ export async function buildApp() {
       }
     }
     huddle.status = huddle.recordingPolicy.mode === "off" ? "recording_off" : "active";
+    await store.saveHuddle(huddle);
     return { huddle };
   });
   app.post("/v1/huddles/:id/token", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const huddle = huddles.get(id);
+    const huddle = await store.getHuddle(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
     const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
     if (huddle.status === "proposed") return reply.status(409).send({ error: "Join the Huddle before requesting a connection token" });
@@ -98,18 +98,19 @@ export async function buildApp() {
   });
   app.post("/v1/huddles/:id/complete", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const huddle = huddles.get(id);
+    const huddle = await store.getHuddle(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
     const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
-    if (huddle.status === "completed") return { huddle, memory: memories.get(id) ?? null };
+    if (huddle.status === "completed") return { huddle, memory: await store.getMemory(id) ?? null };
     huddle.status = "completed";
     if (huddle.recording.state === "recording") { await recordingProvider.stop(huddle.recording.externalId); huddle.recording.state = "stopped"; }
-    events.unshift({ id: crypto.randomUUID(), action: "huddle_completed", actorId: principal.id, occurredAt: new Date().toISOString(), reversible: false, metadata: { huddleId: id } });
-    return { huddle, memory: memories.get(id) ?? null };
+    await store.saveHuddle(huddle);
+    await store.addAuditEvent({ id: crypto.randomUUID(), action: "huddle_completed", actorId: principal.id, occurredAt: new Date().toISOString(), reversible: false, metadata: { huddleId: id, spaceId: huddle.spaceId } });
+    return { huddle, memory: await store.getMemory(id) ?? null };
   });
   app.post("/v1/huddles/:id/transcript", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const huddle = huddles.get(id);
+    const huddle = await store.getHuddle(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
     const principal = principalFrom(request);
     const trustedIngest = canIngestTranscript(request);
@@ -119,12 +120,13 @@ export async function buildApp() {
     const parsed = transcriptSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: "Invalid transcript payload" });
     const transcript: HuddleTranscript = { huddleId: id, text: parsed.data.text, language: parsed.data.language, receivedAt: new Date().toISOString() };
-    transcripts.set(id, transcript);
+    await store.saveTranscript(transcript);
     huddle.transcript = { state: "received", receivedAt: transcript.receivedAt };
     // Video remains evidence. Only transcript text is allowed into the memory generation seam.
     const memory: HuddleMemory = { huddleId: id, summary: transcript.text.slice(0, 500), decisions: [], todos: [], source: "transcript", createdAt: transcript.receivedAt };
-    memories.set(id, memory);
-    events.unshift({ id: crypto.randomUUID(), action: "huddle_transcript_received", actorId: trustedIngest ? "transcript-worker" : principal!.id, occurredAt: transcript.receivedAt, reversible: false, metadata: { huddleId: id, language: transcript.language ?? "und" } });
+    await store.saveHuddle(huddle);
+    await store.saveMemory(memory);
+    await store.addAuditEvent({ id: crypto.randomUUID(), action: "huddle_transcript_received", actorId: trustedIngest ? "transcript-worker" : principal!.id, occurredAt: transcript.receivedAt, reversible: false, metadata: { huddleId: id, language: transcript.language ?? "und", spaceId: huddle.spaceId } });
     return { huddle, memory };
   });
   app.post("/v1/speak", async (request, reply) => {
@@ -133,7 +135,8 @@ export async function buildApp() {
     const now = new Date().toISOString();
     const received: AuditEvent = { id: crypto.randomUUID(), action: "speak_received", actorId: parsed.data.actorId, occurredAt: now, reversible: false, metadata: { textLength: String(parsed.data.text.length) } };
     const routed: AuditEvent = { id: crypto.randomUUID(), action: "routing_decided", actorId: "ai", occurredAt: now, reversible: true, metadata: { destination: "Product / Refund policy", confidence: "medium" } };
-    events.unshift(received, routed);
+    await store.addAuditEvent(routed);
+    await store.addAuditEvent(received);
     const surface = { kind: "approval" as const, id: "refund-48h", title: "返金ポリシーは、いま声で決められます。", rationale: "Sarahも合意済みです。AIが論点と過去の判断をまとめました。", primaryLabel: "判断を聞く", secondaryLabel: "30秒だけ聞く" };
     if (!isAllowedSurface(surface)) return reply.status(500).send({ error: "Unsupported surface" });
     const response: SpeakResponse = { narration: { id: crypto.randomUUID(), greeting: "受け取りました。", title: "次に進める形にしています。", body: "宛先を選ばずに話した内容を整理し、必要な人と次の判断を見つけます。", surface }, auditEvents: [received, routed] };
