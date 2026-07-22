@@ -61,3 +61,7 @@ Local development defaults to `HYOJO_AUTH_MODE=development`, which accepts the d
 ## Deployment readiness
 
 `GET /health` confirms the API process is alive. `GET /readyz` verifies the selected data store and reports capability configuration without exposing secrets. In production it returns `503` unless durable Postgres and signed authentication are configured; LiveKit remains separately visible because Speak can run while Huddle media is deliberately unavailable.
+
+## Optional AI narration
+
+Speak defaults to a deterministic mock response so local development has no model cost. To use the OpenAI Responses API server-side, explicitly set `HYOJO_NARRATION_PROVIDER=openai`, `OPENAI_API_KEY`, and `OPENAI_MODEL`. The response is requested as a bounded JSON schema, parsed and length-validated, then attached only to HYOJO's allow-listed Adaptive Surface. Requests set `store: false`; API keys never enter mobile or Admin environment variables. See the [OpenAI Responses quickstart](https://platform.openai.com/docs/quickstart/make-your-first-api-request).

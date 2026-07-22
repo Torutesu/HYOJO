@@ -8,6 +8,7 @@ import { canAccessSpace, principalFrom } from "./access.js";
 import { createLiveKitConnection } from "./livekit.js";
 import { createStore } from "./store.js";
 import { expireHuddleRecords } from "./retention.js";
+import { generateNarration } from "./narration.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -188,9 +189,9 @@ export async function buildApp() {
     const routed: AuditEvent = { id: crypto.randomUUID(), action: "routing_decided", actorId: "ai", occurredAt: now, reversible: true, metadata: { destination: "Product / Refund policy", confidence: "medium" } };
     await store.addAuditEvent(routed);
     await store.addAuditEvent(received);
-    const surface = { kind: "approval" as const, id: "refund-48h", title: "返金ポリシーは、いま声で決められます。", rationale: "Sarahも合意済みです。AIが論点と過去の判断をまとめました。", primaryLabel: "判断を聞く", secondaryLabel: "30秒だけ聞く" };
-    if (!isAllowedSurface(surface)) return reply.status(500).send({ error: "Unsupported surface" });
-    const response: SpeakResponse = { narration: { id: crypto.randomUUID(), greeting: "受け取りました。", title: "次に進める形にしています。", body: "宛先を選ばずに話した内容を整理し、必要な人と次の判断を見つけます。", surface }, auditEvents: [received, routed] };
+    const narration = await generateNarration(parsed.data.text);
+    if (narration.surface && !isAllowedSurface(narration.surface)) return reply.status(500).send({ error: "Unsupported surface" });
+    const response: SpeakResponse = { narration, auditEvents: [received, routed] };
     return response;
   });
   return app;
