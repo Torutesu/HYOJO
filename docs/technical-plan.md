@@ -55,3 +55,7 @@ Local development defaults to `HYOJO_AUTH_MODE=development`, which accepts the d
 ## Retention
 
 `POST /v1/admin/retention/run` applies each Space's transcript retention period to completed Huddles and deletes their stored transcript and Institutional Memory, recording an audit event. It is restricted to an administrator's assigned Spaces. Video is not deleted by the API because it belongs to the object-store evidence layer; configure an S3 lifecycle rule matching `videoRetentionDays` for the `hyojo/huddles/` prefix.
+
+## Deployment readiness
+
+`GET /health` confirms the API process is alive. `GET /readyz` verifies the selected data store and reports capability configuration without exposing secrets. In production it returns `503` unless durable Postgres and signed authentication are configured; LiveKit remains separately visible because Speak can run while Huddle media is deliberately unavailable.

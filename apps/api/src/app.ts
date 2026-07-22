@@ -25,6 +25,18 @@ export async function buildApp() {
   }
 
   app.get("/health", async () => ({ ok: true, service: "hyojo-api" }));
+  app.get("/readyz", async (_request, reply) => {
+    const storage = await store.health();
+    const production = process.env.HYOJO_AUTH_MODE === "production" || process.env.NODE_ENV === "production";
+    const config = {
+      database: Boolean(process.env.DATABASE_URL),
+      signedAuth: Boolean(process.env.HYOJO_JWT_SECRET),
+      livekit: Boolean(process.env.LIVEKIT_URL && process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET),
+      recording: process.env.HYOJO_RECORDING_PROVIDER === "livekit" ? "livekit" : "development-memory"
+    };
+    const ready = storage.ok && (!production || (config.database && config.signedAuth));
+    return reply.status(ready ? 200 : 503).send({ ok: ready, service: "hyojo-api", storage, config });
+  });
   app.addHook("onClose", async () => { await store.close(); });
   app.get("/v1/audit-events", async () => ({ events: await store.listAuditEvents() }));
   app.get("/v1/spaces/:spaceId/recording-policy", async (request, reply) => {

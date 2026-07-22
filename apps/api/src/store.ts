@@ -15,6 +15,7 @@ export interface HyojoStore {
   deleteTranscript(huddleId: string): Promise<void>;
   addAuditEvent(event: AuditEvent): Promise<void>;
   listAuditEvents(): Promise<AuditEvent[]>;
+  health(): Promise<{ persistent: boolean; ok: boolean }>;
   close(): Promise<void>;
 }
 
@@ -37,6 +38,7 @@ class MemoryStore implements HyojoStore {
   async deleteTranscript(id: string) { this.transcripts.delete(id); }
   async addAuditEvent(value: AuditEvent) { this.events.unshift(value); }
   async listAuditEvents() { return this.events; }
+  async health() { return { persistent: false, ok: true }; }
   async close() {}
 }
 
@@ -64,6 +66,7 @@ class PostgresStore implements HyojoStore {
   async deleteTranscript(id: string) { await this.sql`delete from huddle_transcripts where huddle_id = ${id}`; }
   async addAuditEvent(value: AuditEvent) { await this.sql`insert into audit_events (id, space_id, document) values (${value.id}, ${(value.metadata.spaceId ?? "system")}, ${this.sql.json(value)})`; }
   async listAuditEvents() { const rows = await this.sql`select document from audit_events order by created_at desc`; return rows.map((row) => row.document as AuditEvent); }
+  async health() { try { await this.sql`select 1`; return { persistent: true, ok: true }; } catch { return { persistent: true, ok: false }; } }
   async close() { await this.sql.end(); }
 }
 

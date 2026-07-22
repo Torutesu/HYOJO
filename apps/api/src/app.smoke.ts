@@ -1,6 +1,8 @@
 import { buildApp } from "./app.js";
 
 const app = await buildApp();
+const ready = await app.inject({ method: "GET", url: "/readyz" });
+if (ready.statusCode !== 200 || ready.json().storage.persistent !== false) throw new Error("Development readiness failed");
 const response = await app.inject({ method: "POST", url: "/v1/speak", headers: { "x-hyojo-actor": "toru" }, payload: { text: "Sarah と5分話したい" } });
 if (response.statusCode !== 200) throw new Error(`Speak failed: ${response.statusCode}`);
 const payload = response.json();
@@ -30,6 +32,8 @@ await app.close();
 const previousAuthMode = process.env.HYOJO_AUTH_MODE;
 process.env.HYOJO_AUTH_MODE = "production";
 const productionApp = await buildApp();
+const productionReady = await productionApp.inject({ method: "GET", url: "/readyz" });
+if (productionReady.statusCode !== 503) throw new Error("Production readiness boundary failed");
 const spoofedHeader = await productionApp.inject({ method: "POST", url: "/v1/speak", headers: { "x-hyojo-actor": "toru" }, payload: { text: "This must not trust a header in production." } });
 if (spoofedHeader.statusCode !== 401) throw new Error("Production header spoofing boundary failed");
 await productionApp.close();
