@@ -66,6 +66,7 @@ export default function HuddlePage() {
   }, [id]);
 
   const currentHuddle = huddle ?? createDemoHuddle(id);
+  const recordingMode = currentHuddle.recordingPolicy?.mode ?? "required";
 
   async function handleJoin() {
     try {
@@ -146,7 +147,7 @@ export default function HuddlePage() {
               <div className="hyojo-meta">
                 <Pill>{currentHuddle.status}</Pill>
                 <Pill>{currentHuddle.transcript.state}</Pill>
-                <Pill>{currentHuddle.recordingPolicy.mode}</Pill>
+                <Pill>{recordingMode}</Pill>
               </div>
               <div className="hyojo-actions">
                 <button ref={joinButtonRef} className="hyojo-button hyojo-button-primary" onClick={() => void handleJoin()}>参加する</button>

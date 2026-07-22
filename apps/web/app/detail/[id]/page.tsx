@@ -15,6 +15,7 @@ export default function DetailPage() {
   const [huddle, setHuddle] = useState<Huddle | null>(snapshot.huddles.find((item) => item.id === id) ?? null);
   const [memory, setMemory] = useState<HuddleMemory | null>(snapshot.memories[id] ?? null);
   const [loading, setLoading] = useState(false);
+  const recordingMode = huddle?.recordingPolicy?.mode ?? "required";
 
   useEffect(() => {
     let mounted = true;
@@ -100,7 +101,7 @@ export default function DetailPage() {
               items={[
                 { label: "recording", value: huddle.recordingDisclosure, tone: "good" },
                 { label: "transcript", value: huddle.transcript.state, tone: "warn" },
-                { label: "recording policy", value: huddle.recordingPolicy.mode, tone: "muted" }
+                  { label: "recording policy", value: recordingMode, tone: "muted" }
               ]}
             />
             {memory ? (

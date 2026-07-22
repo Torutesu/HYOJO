@@ -6,6 +6,10 @@ import { DecisionCard, NarrationCard, Pill, SourceSheet, SpeakComposer } from "@
 import { createHuddle, defaultNarration, getApiBaseUrl, getLocalSnapshot, listActionItems, listHuddles, approveSurface, speak, joinHuddle, getHuddleConnection, completeHuddle, sendTranscript, completeActionItem, type ActionItem } from "../src/lib/api";
 import type { Narration, Huddle, HuddleMemory } from "@hyojo/domain";
 
+function formatTimestamp(value: string) {
+  return new Date(value).toISOString().slice(0, 16).replace("T", " ");
+}
+
 export default function HomePage() {
   const [snapshot] = useState(() => getLocalSnapshot());
   const [narration, setNarration] = useState<Narration>(snapshot.narration ?? defaultNarration);
@@ -144,6 +148,8 @@ export default function HomePage() {
     }
   }
 
+  const activeRecordingMode = activeHuddle?.recordingPolicy?.mode ?? "required";
+
   return (
     <main className="hyojo-shell">
       <div className="hyojo-frame">
@@ -244,9 +250,9 @@ export default function HomePage() {
                 <Link className="hyojo-list-item" key={huddle.id} href={`/huddle/${huddle.id}`}>
                   <div className="hyojo-list-item-main">
                     <div className="hyojo-list-title">{huddle.title}</div>
-                    <div className="hyojo-list-meta">{huddle.status} · {new Date(huddle.createdAt).toLocaleString("ja-JP")}</div>
+                    <div className="hyojo-list-meta">{huddle.status} · {formatTimestamp(huddle.createdAt)}</div>
                   </div>
-                  <Pill>{huddle.recordingPolicy.mode}</Pill>
+                  <Pill>{huddle.recordingPolicy?.mode ?? "required"}</Pill>
                 </Link>
               ))}
               {actions.map((item) => (
@@ -280,7 +286,7 @@ export default function HomePage() {
                 <div className="hyojo-meta">
                   <Pill>{activeHuddle.status}</Pill>
                   <Pill>{activeHuddle.transcript.state}</Pill>
-                  <Pill>{activeHuddle.recordingPolicy.mode}</Pill>
+                  <Pill>{activeRecordingMode}</Pill>
                 </div>
                 <div className="hyojo-actions">
                   <button ref={joinButtonRef} className="hyojo-button hyojo-button-primary" onClick={() => void handleJoinHuddle()}>参加する</button>

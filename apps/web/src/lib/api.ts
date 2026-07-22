@@ -112,19 +112,54 @@ function buildHuddle(input: { id?: string; title: string; participants: string[]
   };
 }
 
+function normalizeHuddle(value: Partial<Huddle> & { id: string; title?: string; participants?: string[]; spaceId?: string }): Huddle {
+  const recordingMode = value.recordingPolicy?.mode ?? "required";
+  const recordingPolicy = {
+    mode: recordingMode,
+    videoRetentionDays: value.recordingPolicy?.videoRetentionDays ?? 30,
+    transcriptRetentionDays: value.recordingPolicy?.transcriptRetentionDays ?? 365,
+    allowMemoryIndexing: value.recordingPolicy?.allowMemoryIndexing ?? recordingMode !== "off"
+  } as const;
+  const recordingDisclosure = value.recordingDisclosure ?? (recordingMode === "off" ? "このハドルは記録されません。" : "録画・文字起こし中。参加者全員に表示されます。");
+  const recording = value.recording ?? { provider: recordingMode === "off" ? "none" : "memory", state: "not_started" };
+  const transcript = value.transcript ?? { state: recordingMode === "off" ? "not_requested" : "pending" };
+  return {
+    id: value.id,
+    spaceId: value.spaceId ?? "product",
+    title: value.title ?? "返金ポリシーを決める",
+    participants: value.participants ?? ["toru", "sarah"],
+    status: value.status ?? "proposed",
+    recordingPolicy,
+    recordingDisclosure,
+    recording,
+    transcript,
+    createdAt: value.createdAt ?? nowIso()
+  };
+}
+
+function normalizeHuddleResponse(huddle: Huddle): Huddle {
+  return normalizeHuddle(huddle);
+}
+
 export function createDemoHuddle(id: string): Huddle {
   return buildHuddle({ id, title: "返金ポリシーを決める", participants: ["toru", "sarah"], spaceId: "product", recordingPolicy: "required" });
 }
 
 function seedLocalState(): LocalState {
-  const huddle = buildHuddle({ title: "返金ポリシーを決める", participants: ["toru", "sarah"], spaceId: "product", recordingPolicy: "required" });
+  const huddle = normalizeHuddle(buildHuddle({
+    id: "demo-huddle-refund-48h",
+    title: "返金ポリシーを決める",
+    participants: ["toru", "sarah"],
+    spaceId: "product",
+    recordingPolicy: "required"
+  }, "2026-07-22T00:00:00.000Z"));
   const memory: HuddleMemory = {
     huddleId: huddle.id,
     summary: "返金ポリシーの判断を、48時間案を軸に進める。",
     decisions: ["決済完了から48時間以内は全額返金"],
     todos: [{ owner: "AI", text: "CSマニュアルを更新する" }],
     source: "manual",
-    createdAt: nowIso()
+    createdAt: "2026-07-22T00:00:00.000Z"
   };
   return {
     narration: {
@@ -180,9 +215,12 @@ function loadLocalState(): LocalState {
   }
   try {
     const parsed = JSON.parse(raw) as Partial<LocalState>;
+    const normalizedHuddles = Array.isArray(parsed.huddles)
+      ? parsed.huddles.filter((item): item is Huddle => Boolean(item && typeof item === "object" && "id" in item)).map((item) => normalizeHuddle(item))
+      : seedLocalState().huddles;
     const state = {
       narration: parsed.narration ?? seedLocalState().narration,
-      huddles: Array.isArray(parsed.huddles) ? parsed.huddles : seedLocalState().huddles,
+      huddles: normalizedHuddles,
       memories: parsed.memories ?? seedLocalState().memories,
       actionItems: Array.isArray(parsed.actionItems) ? parsed.actionItems : seedLocalState().actionItems,
       approvals: Array.isArray(parsed.approvals) ? parsed.approvals : []
@@ -266,14 +304,18 @@ export async function approveSurface(id: string) {
 
 export async function createHuddle(input: { title: string; participants: string[]; spaceId?: string; recordingPolicy?: "required" | "optional" | "off" }) {
   return tryRemote(
-    async () => remoteJson<{ huddle: Huddle }>(await fetch(`${apiBaseUrl}/v1/huddles`, {
+    async () => {
+      const response = await fetch(`${apiBaseUrl}/v1/huddles`, {
       method: "POST",
       headers: { "content-type": "application/json", ...actorHeader },
       body: JSON.stringify({ title: input.title, participants: input.participants, spaceId: input.spaceId ?? "product", recordingPolicy: input.recordingPolicy ?? "required" })
-    })),
+    });
+      const data = await remoteJson<{ huddle: Huddle }>(response);
+      return { huddle: normalizeHuddleResponse(data.huddle) };
+    },
     async () => {
       const state = loadLocalState();
-      const huddle = buildHuddle({ title: input.title, participants: input.participants, spaceId: input.spaceId ?? "product", recordingPolicy: input.recordingPolicy ?? "required" });
+      const huddle = normalizeHuddleResponse(buildHuddle({ title: input.title, participants: input.participants, spaceId: input.spaceId ?? "product", recordingPolicy: input.recordingPolicy ?? "required" }));
       state.huddles.unshift(huddle);
       saveLocalState(state);
       return { huddle };
@@ -283,7 +325,11 @@ export async function createHuddle(input: { title: string; participants: string[
 
 export async function joinHuddle(id: string) {
   return tryRemote(
-    async () => remoteJson<{ huddle: Huddle }>(await fetch(`${apiBaseUrl}/v1/huddles/${id}/join`, { method: "POST", headers: actorHeader })),
+    async () => {
+      const response = await fetch(`${apiBaseUrl}/v1/huddles/${id}/join`, { method: "POST", headers: actorHeader });
+      const data = await remoteJson<{ huddle: Huddle }>(response);
+      return { huddle: normalizeHuddleResponse(data.huddle) };
+    },
     async () => {
       const state = loadLocalState();
       let huddle = state.huddles.find((item) => item.id === id);
@@ -294,7 +340,7 @@ export async function joinHuddle(id: string) {
       huddle.status = huddle.recordingPolicy.mode === "off" ? "recording_off" : "active";
       huddle.recording.state = huddle.recordingPolicy.mode === "off" ? "not_started" : "recording";
       saveLocalState(state);
-      return { huddle };
+      return { huddle: normalizeHuddleResponse(huddle) };
     }
   );
 }
@@ -328,7 +374,11 @@ export async function getHuddleConnection(id: string) {
 
 export async function completeHuddle(id: string) {
   return tryRemote(
-    async () => remoteJson<{ huddle: Huddle; memory: HuddleMemory | null }>(await fetch(`${apiBaseUrl}/v1/huddles/${id}/complete`, { method: "POST", headers: actorHeader })),
+    async () => {
+      const response = await fetch(`${apiBaseUrl}/v1/huddles/${id}/complete`, { method: "POST", headers: actorHeader });
+      const data = await remoteJson<{ huddle: Huddle; memory: HuddleMemory | null }>(response);
+      return { huddle: normalizeHuddleResponse(data.huddle), memory: data.memory };
+    },
     async () => {
       const state = loadLocalState();
       let huddle = state.huddles.find((item) => item.id === id);
@@ -348,27 +398,35 @@ export async function completeHuddle(id: string) {
       };
       state.memories[id] = memory;
       saveLocalState(state);
-      return { huddle, memory };
+      return { huddle: normalizeHuddleResponse(huddle), memory };
     }
   );
 }
 
 export async function getHuddle(id: string) {
   return tryRemote(
-    async () => remoteJson<{ huddle: Huddle; memory: HuddleMemory | null }>(await fetch(`${apiBaseUrl}/v1/huddles/${id}`, { headers: actorHeader })),
+    async () => {
+      const response = await fetch(`${apiBaseUrl}/v1/huddles/${id}`, { headers: actorHeader });
+      const data = await remoteJson<{ huddle: Huddle; memory: HuddleMemory | null }>(response);
+      return { huddle: normalizeHuddleResponse(data.huddle), memory: data.memory };
+    },
     async () => {
       const state = loadLocalState();
       const huddle = state.huddles.find((item) => item.id === id);
       if (!huddle) throw new Error("Huddle not found");
-      return { huddle, memory: state.memories[id] ?? null };
+      return { huddle: normalizeHuddleResponse(huddle), memory: state.memories[id] ?? null };
     }
   );
 }
 
 export async function listHuddles() {
   return tryRemote(
-    async () => remoteJson<{ huddles: Huddle[] }>(await fetch(`${apiBaseUrl}/v1/huddles`, { headers: actorHeader })),
-    async () => ({ huddles: loadLocalState().huddles.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)) })
+    async () => {
+      const response = await fetch(`${apiBaseUrl}/v1/huddles`, { headers: actorHeader });
+      const data = await remoteJson<{ huddles: Huddle[] }>(response);
+      return { huddles: data.huddles.map(normalizeHuddleResponse) };
+    },
+    async () => ({ huddles: loadLocalState().huddles.slice().map(normalizeHuddleResponse).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) })
   );
 }
 
@@ -403,11 +461,15 @@ export async function completeActionItem(huddleId: string, owner: string, text: 
 
 export async function sendTranscript(id: string, payload: { text: string; language?: string; decisions?: string[]; todos?: Array<{ owner: string; text: string }> }) {
   return tryRemote(
-    async () => remoteJson<{ huddle: Huddle; memory: HuddleMemory }>(await fetch(`${apiBaseUrl}/v1/huddles/${id}/transcript`, {
+    async () => {
+      const response = await fetch(`${apiBaseUrl}/v1/huddles/${id}/transcript`, {
       method: "POST",
       headers: { "content-type": "application/json", ...actorHeader },
       body: JSON.stringify({ decisions: [], todos: [], ...payload })
-    })),
+    });
+      const data = await remoteJson<{ huddle: Huddle; memory: HuddleMemory }>(response);
+      return { huddle: normalizeHuddleResponse(data.huddle), memory: data.memory };
+    },
     async () => {
       const state = loadLocalState();
       let huddle = state.huddles.find((item) => item.id === id);
@@ -430,7 +492,7 @@ export async function sendTranscript(id: string, payload: { text: string; langua
         ...(payload.todos ?? []).map((todo) => ({ huddleId: id, huddleTitle: huddle.title, owner: todo.owner, text: todo.text }))
       ];
       saveLocalState(state);
-      return { huddle, memory };
+      return { huddle: normalizeHuddleResponse(huddle), memory };
     }
   );
 }
