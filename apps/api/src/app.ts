@@ -7,6 +7,7 @@ import { createRecordingProvider } from "./recording.js";
 import { canAccessSpace, principalFrom } from "./access.js";
 import { createLiveKitConnection } from "./livekit.js";
 import { createStore } from "./store.js";
+import { expireHuddleRecords } from "./retention.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -128,6 +129,11 @@ export async function buildApp() {
     await store.saveMemory(memory);
     await store.addAuditEvent({ id: crypto.randomUUID(), action: "huddle_transcript_received", actorId: trustedIngest ? "transcript-worker" : principal!.id, occurredAt: transcript.receivedAt, reversible: false, metadata: { huddleId: id, language: transcript.language ?? "und", spaceId: huddle.spaceId } });
     return { huddle, memory };
+  });
+  app.post("/v1/admin/retention/run", async (request, reply) => {
+    const principal = await principalFrom(request);
+    if (!principal || principal.role !== "admin") return reply.status(403).send({ error: "Admin access required" });
+    return expireHuddleRecords(store, new Date(), principal.spaceIds);
   });
   app.post("/v1/speak", async (request, reply) => {
     const parsed = speakSchema.safeParse(request.body);

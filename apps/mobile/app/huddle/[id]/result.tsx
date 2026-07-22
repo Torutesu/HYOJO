@@ -8,7 +8,13 @@ export default function HuddleResult() {
   const [title, setTitle] = useState("ハドルの記録");
   const [message, setMessage] = useState("文字起こしを受信しています…");
 
-  useEffect(() => { void getHuddle(id).then(({ huddle, memory }) => { setTitle(huddle.title); setMessage(memory?.summary ?? (huddle.transcript.state === "pending" ? "録画を処理しています。文字起こしが届くと、ここに要約・決定事項・TODOを表示します。" : "このハドルは記録対象外です。")); }).catch(() => setMessage("記録を読み込めませんでした。")); }, [id]);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => { void getHuddle(id).then(({ huddle, memory }) => { if (!active) return; setTitle(huddle.title); setMessage(memory?.summary ?? (huddle.transcript.state === "pending" ? "録画を処理しています。文字起こしが届くと、ここに要約・決定事項・TODOを表示します。" : "このハドルは記録対象外です。")); }).catch(() => { if (active) setMessage("記録を読み込めませんでした。"); }); };
+    refresh();
+    const timer = setInterval(refresh, 5_000);
+    return () => { active = false; clearInterval(timer); };
+  }, [id]);
 
   return <SafeAreaView style={styles.screen}><View style={styles.body}><Text style={styles.eyebrow}>HUDDLE MEMORY</Text><Text style={styles.title}>{title}</Text><View style={styles.card}><Text style={styles.label}>記録の状態</Text><Text style={styles.copy}>{message}</Text></View><Pressable onPress={() => router.replace("/")} style={styles.primary}><Text style={styles.primaryText}>ホームに戻る</Text></Pressable></View></SafeAreaView>;
 }

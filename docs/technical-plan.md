@@ -51,3 +51,7 @@ Set `DATABASE_URL` to use the durable repository. Apply `apps/api/migrations/001
 ## Authentication boundary
 
 Local development defaults to `HYOJO_AUTH_MODE=development`, which accepts the documented `x-hyojo-actor` fixtures. Production must set `HYOJO_AUTH_MODE=production` and `HYOJO_JWT_SECRET`; requests then require an HS256 Bearer JWT containing `sub`, `role` (`admin` or `member`), and `space_ids` (or `spaces`) string-array claims. Optional issuer and audience checks are enabled with `HYOJO_JWT_ISSUER` and `HYOJO_JWT_AUDIENCE`. Actor IDs from request bodies are never trusted.
+
+## Retention
+
+`POST /v1/admin/retention/run` applies each Space's transcript retention period to completed Huddles and deletes their stored transcript and Institutional Memory, recording an audit event. It is restricted to an administrator's assigned Spaces. Video is not deleted by the API because it belongs to the object-store evidence layer; configure an S3 lifecycle rule matching `videoRetentionDays` for the `hyojo/huddles/` prefix.

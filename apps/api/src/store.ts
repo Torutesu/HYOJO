@@ -5,11 +5,14 @@ export interface HyojoStore {
   getPolicy(spaceId: string): Promise<RecordingPolicy | undefined>;
   savePolicy(spaceId: string, policy: RecordingPolicy): Promise<void>;
   getHuddle(id: string): Promise<Huddle | undefined>;
+  listHuddles(): Promise<Huddle[]>;
   saveHuddle(huddle: Huddle): Promise<void>;
   getMemory(huddleId: string): Promise<HuddleMemory | undefined>;
   saveMemory(memory: HuddleMemory): Promise<void>;
+  deleteMemory(huddleId: string): Promise<void>;
   getTranscript(huddleId: string): Promise<HuddleTranscript | undefined>;
   saveTranscript(transcript: HuddleTranscript): Promise<void>;
+  deleteTranscript(huddleId: string): Promise<void>;
   addAuditEvent(event: AuditEvent): Promise<void>;
   listAuditEvents(): Promise<AuditEvent[]>;
   close(): Promise<void>;
@@ -24,11 +27,14 @@ class MemoryStore implements HyojoStore {
   async getPolicy(id: string) { return this.policies.get(id); }
   async savePolicy(id: string, value: RecordingPolicy) { this.policies.set(id, value); }
   async getHuddle(id: string) { return this.huddles.get(id); }
+  async listHuddles() { return [...this.huddles.values()]; }
   async saveHuddle(value: Huddle) { this.huddles.set(value.id, value); }
   async getMemory(id: string) { return this.memories.get(id); }
   async saveMemory(value: HuddleMemory) { this.memories.set(value.huddleId, value); }
+  async deleteMemory(id: string) { this.memories.delete(id); }
   async getTranscript(id: string) { return this.transcripts.get(id); }
   async saveTranscript(value: HuddleTranscript) { this.transcripts.set(value.huddleId, value); }
+  async deleteTranscript(id: string) { this.transcripts.delete(id); }
   async addAuditEvent(value: AuditEvent) { this.events.unshift(value); }
   async listAuditEvents() { return this.events; }
   async close() {}
@@ -48,11 +54,14 @@ class PostgresStore implements HyojoStore {
   async getPolicy(id: string) { return this.getDocument<RecordingPolicy>("space_policies", id); }
   async savePolicy(id: string, value: RecordingPolicy) { await this.saveDocument("space_policies", "space_id", id, value); }
   async getHuddle(id: string) { return this.getDocument<Huddle>("huddles", id); }
+  async listHuddles() { const rows = await this.sql`select document from huddles`; return rows.map((row) => row.document as Huddle); }
   async saveHuddle(value: Huddle) { await this.saveDocument("huddles", "id", value.id, value, value.spaceId); }
   async getMemory(id: string) { return this.getDocument<HuddleMemory>("huddle_memories", id); }
   async saveMemory(value: HuddleMemory) { await this.saveDocument("huddle_memories", "huddle_id", value.huddleId, value); }
+  async deleteMemory(id: string) { await this.sql`delete from huddle_memories where huddle_id = ${id}`; }
   async getTranscript(id: string) { return this.getDocument<HuddleTranscript>("huddle_transcripts", id); }
   async saveTranscript(value: HuddleTranscript) { await this.saveDocument("huddle_transcripts", "huddle_id", value.huddleId, value); }
+  async deleteTranscript(id: string) { await this.sql`delete from huddle_transcripts where huddle_id = ${id}`; }
   async addAuditEvent(value: AuditEvent) { await this.sql`insert into audit_events (id, space_id, document) values (${value.id}, ${(value.metadata.spaceId ?? "system")}, ${this.sql.json(value)})`; }
   async listAuditEvents() { const rows = await this.sql`select document from audit_events order by created_at desc`; return rows.map((row) => row.document as AuditEvent); }
   async close() { await this.sql.end(); }

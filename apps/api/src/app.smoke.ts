@@ -5,6 +5,8 @@ const response = await app.inject({ method: "POST", url: "/v1/speak", headers: {
 if (response.statusCode !== 200) throw new Error(`Speak failed: ${response.statusCode}`);
 const payload = response.json();
 if (payload.narration?.surface?.kind !== "approval" || payload.auditEvents?.length !== 2) throw new Error("Unexpected Speak response");
+const expiringPolicy = await app.inject({ method: "PATCH", url: "/v1/spaces/product/recording-policy", headers: { "x-hyojo-actor": "toru" }, payload: { mode: "required", videoRetentionDays: 30, transcriptRetentionDays: 0, allowMemoryIndexing: true } });
+if (expiringPolicy.statusCode !== 200) throw new Error("Retention policy setup failed");
 const proposed = await app.inject({ method: "POST", url: "/v1/huddles", headers: { "x-hyojo-actor": "toru" }, payload: { title: "返金ポリシーを決める", participants: ["toru", "sarah"], spaceId: "product", recordingPolicy: "required" } });
 if (proposed.statusCode !== 201 || proposed.json().huddle.status !== "proposed") throw new Error("Huddle proposal failed");
 const huddleId = proposed.json().huddle.id;
@@ -16,6 +18,10 @@ const completed = await app.inject({ method: "POST", url: `/v1/huddles/${huddleI
 if (completed.statusCode !== 200 || completed.json().memory !== null || completed.json().huddle.recording.state !== "stopped") throw new Error("Huddle completion failed");
 const transcript = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/transcript`, headers: { "x-hyojo-actor": "toru" }, payload: { text: "Sarah agrees to a full refund within 48 hours from checkout.", language: "en" } });
 if (transcript.statusCode !== 200 || transcript.json().memory?.source !== "transcript" || transcript.json().huddle.transcript.state !== "received") throw new Error("Transcript memory ingestion failed");
+const retention = await app.inject({ method: "POST", url: "/v1/admin/retention/run", headers: { "x-hyojo-actor": "toru" } });
+if (retention.statusCode !== 200 || !retention.json().expiredHuddleIds.includes(huddleId)) throw new Error("Retention worker failed");
+const expired = await app.inject({ method: "GET", url: `/v1/huddles/${huddleId}`, headers: { "x-hyojo-actor": "toru" } });
+if (expired.json().memory !== null || expired.json().transcript.state !== "not_requested") throw new Error("Retention deletion failed");
 const forbidden = await app.inject({ method: "GET", url: "/v1/spaces/product/recording-policy", headers: { "x-hyojo-actor": "unknown" } });
 if (forbidden.statusCode !== 403) throw new Error("ACL boundary failed");
 console.log("Speak smoke test passed");
