@@ -1,0 +1,8 @@
+{
+  "name": "@hyojo/api",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "tsx watch src/server.ts", "start": "tsx src/server.ts", "smoke": "tsx src/app.smoke.ts", "typecheck": "tsc --noEmit" },
+  "dependencies": { "@hyojo/domain": "*", "@hyojo/adaptive-ui": "*", "@fastify/cors": "^11.1.0", "fastify": "^5.6.0", "zod": "^4.1.0" },
+  "devDependencies": { "@types/node": "^24.0.0", "tsx": "^4.20.0", "typescript": "^5.9.3" }
+}

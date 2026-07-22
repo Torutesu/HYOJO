@@ -1,0 +1,14 @@
+{
+  "name": "hyojo",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=@hyojo/api",
+    "dev:mobile": "npm run start --workspace=@hyojo/mobile",
+    "dev:admin": "npm run dev --workspace=@hyojo/admin",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "@hyojo/admin",
+  "private": true,
+  "scripts": { "dev": "next dev", "build": "next build", "typecheck": "tsc --noEmit" },
+  "dependencies": { "next": "^15.5.0", "react": "^19.1.0", "react-dom": "^19.1.0" },
+  "devDependencies": { "@types/node": "^24.0.0", "@types/react": "^19.1.0", "typescript": "^5.9.3" }
+}

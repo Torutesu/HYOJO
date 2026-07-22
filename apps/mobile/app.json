@@ -1,0 +1,1 @@
+{ "expo": { "name": "HYOJO", "slug": "hyojo", "scheme": "hyojo", "plugins": ["expo-router"], "experiments": { "typedRoutes": true }, "ios": { "bundleIdentifier": "run.hyojo.app" }, "android": { "package": "run.hyojo.app" } } }

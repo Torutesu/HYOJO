@@ -1,0 +1,1 @@
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) { return <html lang="ja"><body style={{ margin: 0, fontFamily: "system-ui, sans-serif", background: "#F5F5F3", color: "#1A1A1A" }}>{children}</body></html>; }
