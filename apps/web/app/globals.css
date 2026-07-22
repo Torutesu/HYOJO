@@ -1,0 +1,437 @@
+:root {
+  color-scheme: light;
+  --bg: #f4efe6;
+  --bg-deep: #e6dcc9;
+  --panel: rgba(255, 252, 246, 0.86);
+  --panel-strong: #fffaf0;
+  --ink: #17140f;
+  --muted: #5f5648;
+  --line: rgba(60, 45, 20, 0.14);
+  --accent: #b95d23;
+  --accent-strong: #2f5b45;
+  --accent-soft: #e9c8ae;
+  --shadow: 0 24px 80px rgba(49, 28, 9, 0.16);
+  --radius-xl: 28px;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+  --display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --body: "Inter", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  font-family: var(--body);
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(255, 225, 178, 0.88), transparent 34%),
+    radial-gradient(circle at 86% 12%, rgba(203, 231, 216, 0.72), transparent 28%),
+    linear-gradient(180deg, #f6f0e5 0%, #efe5d4 40%, #e8dcc7 100%);
+}
+a { color: inherit; text-decoration: none; }
+button, textarea { font: inherit; }
+button { cursor: pointer; }
+
+.hyojo-shell {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.hyojo-frame {
+  max-width: 1320px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  gap: 20px;
+}
+
+.hyojo-sidebar,
+.hyojo-main,
+.hyojo-card,
+.hyojo-sheet,
+.hyojo-composer {
+  background: var(--panel);
+  backdrop-filter: blur(22px);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.hyojo-sidebar {
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  position: sticky;
+  top: 24px;
+  height: fit-content;
+}
+
+.hyojo-brand {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 30px;
+}
+
+.hyojo-brand-mark {
+  font-family: var(--display);
+  font-size: 24px;
+  letter-spacing: 0.04em;
+}
+
+.hyojo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(80, 60, 30, 0.14);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.hyojo-hero {
+  display: grid;
+  gap: 16px;
+}
+
+.hyojo-kicker {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.hyojo-hero h1,
+.hyojo-section-title,
+.hyojo-card-title,
+.hyojo-sheet-title {
+  font-family: var(--display);
+}
+
+.hyojo-hero h1 {
+  font-size: clamp(38px, 4.3vw, 66px);
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+  margin: 0;
+}
+
+.hyojo-copy {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.75;
+  font-size: 14px;
+}
+
+.hyojo-side-grid {
+  margin-top: 26px;
+  display: grid;
+  gap: 14px;
+}
+
+.hyojo-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.hyojo-stat {
+  background: rgba(255, 255, 255, 0.68);
+  border-radius: 18px;
+  border: 1px solid rgba(80, 60, 30, 0.09);
+  padding: 14px;
+}
+
+.hyojo-stat-label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.hyojo-stat-value {
+  display: block;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.hyojo-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.hyojo-main {
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.hyojo-section {
+  padding: 24px;
+  border-bottom: 1px solid rgba(60, 45, 20, 0.1);
+}
+
+.hyojo-section:last-child { border-bottom: 0; }
+
+.hyojo-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.hyojo-section-title {
+  font-size: 22px;
+  margin: 0;
+}
+
+.hyojo-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.hyojo-card,
+.hyojo-sheet,
+.hyojo-composer {
+  border-radius: var(--radius-lg);
+  padding: 18px;
+}
+
+.hyojo-card {
+  display: grid;
+  gap: 10px;
+}
+
+.hyojo-card-warm {
+  background: linear-gradient(180deg, rgba(255, 250, 241, 0.95), rgba(252, 241, 225, 0.94));
+}
+
+.hyojo-card-cool {
+  background: linear-gradient(180deg, rgba(241, 251, 247, 0.96), rgba(230, 244, 236, 0.96));
+}
+
+.hyojo-card-neutral {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.hyojo-decision {
+  border-color: rgba(185, 93, 35, 0.22);
+}
+
+.hyojo-card-kicker,
+.hyojo-sheet-label,
+.hyojo-status {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+
+.hyojo-card-title {
+  font-size: 28px;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+.hyojo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.hyojo-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 11px 16px;
+  font-weight: 700;
+  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.hyojo-button:hover { transform: translateY(-1px); }
+
+.hyojo-button-primary {
+  color: #fff;
+  background: linear-gradient(135deg, #1b1a18, #4f3723);
+  box-shadow: 0 10px 20px rgba(34, 24, 13, 0.2);
+}
+
+.hyojo-button-secondary {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(60, 45, 20, 0.16);
+}
+
+.hyojo-button-ghost {
+  color: var(--muted);
+  background: transparent;
+  border: 1px dashed rgba(60, 45, 20, 0.18);
+}
+
+.hyojo-textarea {
+  width: 100%;
+  resize: vertical;
+  border-radius: 18px;
+  border: 1px solid rgba(60, 45, 20, 0.16);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--ink);
+  padding: 16px;
+  line-height: 1.7;
+  min-height: 120px;
+}
+
+.hyojo-textarea-small { min-height: 104px; }
+
+.hyojo-composer {
+  display: grid;
+  gap: 12px;
+}
+
+.hyojo-composer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.hyojo-sheet-list {
+  display: grid;
+  gap: 12px;
+}
+
+.hyojo-sheet-row {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(60, 45, 20, 0.08);
+}
+
+.hyojo-sheet-row:last-child { border-bottom: 0; }
+
+.hyojo-sheet-value { line-height: 1.75; }
+.hyojo-tone-good { color: var(--accent-strong); }
+.hyojo-tone-warn { color: var(--accent); }
+.hyojo-tone-muted { color: var(--muted); }
+
+.hyojo-list {
+  display: grid;
+  gap: 10px;
+}
+
+.hyojo-list-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(60, 45, 20, 0.1);
+}
+
+.hyojo-list-item-main {
+  display: grid;
+  gap: 4px;
+}
+
+.hyojo-list-title {
+  font-weight: 700;
+}
+
+.hyojo-list-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.hyojo-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hyojo-memory {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.hyojo-memory-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hyojo-todo {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(60, 45, 20, 0.09);
+}
+
+.hyojo-todo-owner {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: var(--accent-strong);
+}
+
+.hyojo-todo-text {
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.hyojo-compare {
+  display: grid;
+  gap: 10px;
+}
+
+.hyojo-compare-option {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(60, 45, 20, 0.09);
+}
+
+.hyojo-compare-option.is-recommended {
+  border-color: rgba(47, 91, 69, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(47, 91, 69, 0.08);
+}
+
+.hyojo-compare-label {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.hyojo-banner {
+  margin-top: 18px;
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(60, 45, 20, 0.08);
+  color: var(--muted);
+}
+
+@media (max-width: 980px) {
+  .hyojo-frame { grid-template-columns: 1fr; }
+  .hyojo-sidebar { position: static; }
+}
+
+@media (max-width: 640px) {
+  .hyojo-shell { padding: 14px; }
+  .hyojo-section { padding: 16px; }
+  .hyojo-card-title { font-size: 24px; }
+  .hyojo-hero h1 { font-size: clamp(34px, 12vw, 48px); }
+  .hyojo-stat-grid { grid-template-columns: 1fr; }
+  .hyojo-composer-row { flex-direction: column; align-items: stretch; }
+  .hyojo-button { width: 100%; justify-content: center; }
+}

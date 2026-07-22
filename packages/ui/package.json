@@ -1,0 +1,14 @@
+{
+  "name": "@hyojo/ui",
+  "version": "0.0.1",
+  "private": true,
+  "main": "src/index.tsx",
+  "types": "src/index.tsx",
+  "dependencies": {
+    "@hyojo/domain": "*",
+    "react": "^19.1.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}
