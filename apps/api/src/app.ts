@@ -38,7 +38,12 @@ export async function buildApp() {
     return reply.status(ready ? 200 : 503).send({ ok: ready, service: "hyojo-api", storage, config });
   });
   app.addHook("onClose", async () => { await store.close(); });
-  app.get("/v1/audit-events", async () => ({ events: await store.listAuditEvents() }));
+  app.get("/v1/audit-events", async (request, reply) => {
+    const principal = await principalFrom(request);
+    if (!principal || principal.role !== "admin") return reply.status(403).send({ error: "Admin access required" });
+    const events = (await store.listAuditEvents()).filter((event) => !event.metadata.spaceId || canAccessSpace(principal, event.metadata.spaceId));
+    return { events };
+  });
   app.post("/v1/approvals/:id/approve", async (request, reply) => {
     const principal = await principalFrom(request);
     if (!principal) return reply.status(401).send({ error: "Authentication required" });
