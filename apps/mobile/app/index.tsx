@@ -3,7 +3,7 @@ import { Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "reac
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import type { Narration } from "@hyojo/domain";
-import { approveSurface, listHuddles, speak, type HuddleListItem } from "../src/api";
+import { approveSurface, listActionItems, listHuddles, speak, type ActionItem, type HuddleListItem } from "../src/api";
 import { useOnboarding } from "../src/onboarding";
 
 const initial: Narration = {
@@ -18,8 +18,9 @@ export default function Home() {
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState("");
   const [huddles, setHuddles] = useState<HuddleListItem[]>([]);
+  const [actionItems, setActionItems] = useState<ActionItem[]>([]);
 
-  useEffect(() => { void listHuddles().then(({ huddles: items }) => setHuddles(items.slice(0, 3))).catch(() => {}); }, []);
+  useEffect(() => { void Promise.all([listHuddles(), listActionItems()]).then(([{ huddles: items }, { items: actions }]) => { setHuddles(items.slice(0, 3)); setActionItems(actions.slice(0, 3)); }).catch(() => {}); }, []);
 
   async function submit() {
     if (!draft.trim()) return;
@@ -48,6 +49,7 @@ export default function Home() {
         <View style={styles.actions}><Pressable onPress={approveAndOpenHuddle} style={styles.primary}><Text style={styles.primaryText}>{narration.surface.primaryLabel}</Text></Pressable><Pressable style={styles.secondary}><Text>{narration.surface.secondaryLabel}</Text></Pressable></View>
       </View>}
       {huddles.length > 0 && <View style={styles.history}><Text style={styles.historyTitle}>最近のHuddle</Text>{huddles.map((huddle) => <Pressable key={huddle.id} onPress={() => router.push({ pathname: huddle.status === "completed" ? "/huddle/[id]/result" : "/huddle/[id]", params: { id: huddle.id } })} style={styles.historyRow}><View><Text style={styles.historyName}>{huddle.title}</Text><Text style={styles.historyMeta}>{huddle.transcript.state === "received" ? "記録を確認できます" : huddle.status === "completed" ? "文字起こしを処理中" : "進行中のHuddle"}</Text></View><Text style={styles.chevron}>›</Text></Pressable>)}</View>}
+      {actionItems.length > 0 && <View style={styles.history}><Text style={styles.historyTitle}>いまやること</Text>{actionItems.map((item) => <Pressable key={`${item.huddleId}-${item.text}`} onPress={() => router.push({ pathname: "/huddle/[id]/result", params: { id: item.huddleId } })} style={styles.historyRow}><View><Text style={styles.historyName}>{item.text}</Text><Text style={styles.historyMeta}>{item.owner} · {item.huddleTitle}</Text></View><Text style={styles.chevron}>›</Text></Pressable>)}</View>}
       <Text style={styles.status}>{status}</Text>
     </View>
     <View style={styles.speak}><TextInput value={draft} onChangeText={setDraft} placeholder="話す（宛先は要らない）" placeholderTextColor="#999" style={styles.input} multiline /><Pressable onPress={submit} style={styles.mic}><Text style={styles.micText}>送る</Text></Pressable></View>

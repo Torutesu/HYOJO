@@ -59,3 +59,11 @@ export async function listHuddles() {
   if (!response.ok) throw new Error("Huddles could not be loaded");
   return response.json() as Promise<{ huddles: HuddleListItem[] }>;
 }
+
+export type ActionItem = { huddleId: string; huddleTitle: string; owner: string; text: string };
+
+export async function listActionItems() {
+  const response = await fetch(`${apiBaseUrl}/v1/action-items`, { headers: { "x-hyojo-actor": "toru" } });
+  if (!response.ok) throw new Error("Action items could not be loaded");
+  return response.json() as Promise<{ items: ActionItem[] }>;
+}

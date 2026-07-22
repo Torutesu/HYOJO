@@ -36,6 +36,8 @@ const completed = await app.inject({ method: "POST", url: `/v1/huddles/${huddleI
 if (completed.statusCode !== 200 || completed.json().memory !== null || completed.json().huddle.recording.state !== "stopped") throw new Error("Huddle completion failed");
 const transcript = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/transcript`, headers: { "x-hyojo-actor": "toru" }, payload: { text: "Sarah agrees to a full refund within 48 hours from checkout.", language: "en", decisions: ["決済完了から48時間以内は全額返金"], todos: [{ owner: "AI", text: "CSマニュアルを更新する" }] } });
 if (transcript.statusCode !== 200 || transcript.json().memory?.source !== "transcript" || transcript.json().memory?.decisions?.length !== 1 || transcript.json().huddle.transcript.state !== "received") throw new Error("Transcript memory ingestion failed");
+const actionItems = await app.inject({ method: "GET", url: "/v1/action-items", headers: { "x-hyojo-actor": "toru" } });
+if (actionItems.statusCode !== 200 || actionItems.json().items?.[0]?.text !== "CSマニュアルを更新する") throw new Error("Action item aggregation failed");
 const retention = await app.inject({ method: "POST", url: "/v1/admin/retention/run", headers: { "x-hyojo-actor": "toru" } });
 if (retention.statusCode !== 200 || !retention.json().expiredHuddleIds.includes(huddleId)) throw new Error("Retention worker failed");
 const expired = await app.inject({ method: "GET", url: `/v1/huddles/${huddleId}`, headers: { "x-hyojo-actor": "toru" } });
