@@ -16,6 +16,7 @@ Mobile-first company OS prototype.
 npm install
 npm run dev:api
 npm run dev:mobile
+npm run dev:admin
 ```
 
 ## Durable local data
