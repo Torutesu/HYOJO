@@ -20,7 +20,7 @@ export async function approveSurface(id: string) {
 export async function createHuddle() {
   const response = await fetch(`${apiBaseUrl}/v1/huddles`, { method: "POST", headers: { "content-type": "application/json", "x-hyojo-actor": "toru" }, body: JSON.stringify({ title: "返金ポリシーを決める", participants: ["toru", "sarah"], spaceId: "product", recordingPolicy: "required" }) });
   if (!response.ok) throw new Error("Huddle request failed");
-  return response.json() as Promise<{ huddle: { id: string; recordingDisclosure: string } }>;
+  return response.json() as Promise<{ huddle: { id: string; recordingDisclosure: string; recordingPolicy: { mode: "required" | "optional" | "off" } } }>;
 }
 
 export async function joinHuddle(id: string) {
