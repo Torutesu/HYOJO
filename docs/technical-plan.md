@@ -44,6 +44,8 @@ The mobile client requests a 15-minute, room-scoped token from `POST /v1/huddles
 
 Ending a Huddle stops server-side recording immediately, but does not manufacture a summary. A transcript worker (or a Space admin in the prototype) submits `POST /v1/huddles/:id/transcript` only after completion; the endpoint creates the Institutional Memory record only when the Space permits indexing. Production workers authenticate with `HYOJO_TRANSCRIPT_INGEST_KEY`; the key is server-side only. Video is retained as evidence and is never supplied to the memory-generation input.
 
+The transcript payload may include bounded `decisions` and `todos` extracted by the worker. HYOJO stores and displays those alongside the transcript-derived summary; it does not infer them from video.
+
 ## Postgres persistence
 
 Set `DATABASE_URL` to use the durable repository. Apply `apps/api/migrations/001_initial.sql` before starting the API. Without `DATABASE_URL`, the API deliberately uses the in-memory store for local prototype work only; no state survives a restart.

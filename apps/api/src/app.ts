@@ -17,7 +17,7 @@ export async function buildApp() {
   const recordingProvider = createRecordingProvider();
   const speakSchema = z.object({ text: z.string().trim().min(1).max(2_000) });
   const huddleSchema = z.object({ title: z.string().trim().min(1).max(160), participants: z.array(z.string().min(1)).min(1), spaceId: z.string().min(1), recordingPolicy: z.enum(["required", "optional", "off"]).default("required") });
-  const transcriptSchema = z.object({ text: z.string().trim().min(1).max(50_000), language: z.string().trim().min(2).max(16).optional() });
+  const transcriptSchema = z.object({ text: z.string().trim().min(1).max(50_000), language: z.string().trim().min(2).max(16).optional(), decisions: z.array(z.string().trim().min(1).max(500)).max(20).default([]), todos: z.array(z.object({ owner: z.string().trim().min(1).max(120), text: z.string().trim().min(1).max(500) })).max(50).default([]) });
 
   function canIngestTranscript(request: { headers: Record<string, unknown> }) {
     const ingestKey = process.env.HYOJO_TRANSCRIPT_INGEST_KEY;
@@ -142,7 +142,7 @@ export async function buildApp() {
     await store.saveTranscript(transcript);
     huddle.transcript = { state: "received", receivedAt: transcript.receivedAt };
     // Video remains evidence. Only transcript text is allowed into the memory generation seam.
-    const memory: HuddleMemory = { huddleId: id, summary: transcript.text.slice(0, 500), decisions: [], todos: [], source: "transcript", createdAt: transcript.receivedAt };
+    const memory: HuddleMemory = { huddleId: id, summary: transcript.text.slice(0, 500), decisions: parsed.data.decisions, todos: parsed.data.todos, source: "transcript", createdAt: transcript.receivedAt };
     await store.saveHuddle(huddle);
     await store.saveMemory(memory);
     await store.addAuditEvent({ id: crypto.randomUUID(), action: "huddle_transcript_received", actorId: trustedIngest ? "transcript-worker" : principal!.id, occurredAt: transcript.receivedAt, reversible: false, metadata: { huddleId: id, language: transcript.language ?? "und", spaceId: huddle.spaceId } });

@@ -38,7 +38,7 @@ export async function completeHuddle(id: string) {
 export async function getHuddle(id: string) {
   const response = await fetch(`${apiBaseUrl}/v1/huddles/${id}`, { headers: { "x-hyojo-actor": "toru" } });
   if (!response.ok) throw new Error("Huddle could not be loaded");
-  return response.json() as Promise<{ huddle: { title: string; transcript: { state: "not_requested" | "pending" | "received" } }; memory: { summary: string } | null }>;
+  return response.json() as Promise<{ huddle: { title: string; transcript: { state: "not_requested" | "pending" | "received" } }; memory: { summary: string; decisions: string[]; todos: Array<{ owner: string; text: string }> } | null }>;
 }
 
 export type HuddleListItem = { id: string; title: string; status: "proposed" | "active" | "completed" | "recording_off"; transcript: { state: "not_requested" | "pending" | "received" }; createdAt: string };
