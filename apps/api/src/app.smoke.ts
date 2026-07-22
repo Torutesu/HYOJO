@@ -1,5 +1,11 @@
 import { buildApp } from "./app.js";
 
+// GitHub Actions exposes workflow annotations even when raw job logs require authentication.
+// Keep the original exception behaviour while making a database-only failure actionable.
+process.on("uncaughtExceptionMonitor", (error) => {
+  console.error(`::error title=API smoke test failed::${error.message}`);
+});
+
 const app = await buildApp();
 const ready = await app.inject({ method: "GET", url: "/readyz" });
 const usesPersistentStore = Boolean(process.env.DATABASE_URL);
