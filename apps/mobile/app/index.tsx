@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import type { Narration } from "@hyojo/domain";
 import { approveSurface, listHuddles, speak, type HuddleListItem } from "../src/api";
+import { useOnboarding } from "../src/onboarding";
 
 const initial: Narration = {
   id: "morning", greeting: "おはよう、Toru。", title: "今、決めると前に進むことがひとつあります。",
@@ -12,6 +13,7 @@ const initial: Narration = {
 };
 
 export default function Home() {
+  const { profile } = useOnboarding();
   const [narration, setNarration] = useState(initial);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState("");
@@ -36,7 +38,7 @@ export default function Home() {
     <StatusBar style="dark" />
     <View style={styles.header}><Text style={styles.meta}>7月22日 水 · 朝</Text><Text style={styles.brand}>HYOJO</Text></View>
     <View style={styles.content}>
-      <Text style={styles.greeting}>{narration.greeting}</Text>
+      <Text style={styles.greeting}>{narration.greeting.replace("Toru", profile?.name ?? "あなた")}</Text>
       <Text style={styles.title}>{narration.title}</Text>
       <View style={styles.card}><Text style={styles.cardLabel}>AI の語り</Text><Text style={styles.cardTitle}>{narration.body}</Text></View>
       {narration.surface?.kind === "approval" && <View style={[styles.card, styles.decision]}>

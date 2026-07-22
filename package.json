@@ -9,7 +9,5 @@
     "db:migrate": "npm run migrate --workspace=@hyojo/api",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
-  "devDependencies": {
-    "typescript": "^5.9.3"
-  }
+  "devDependencies": { "typescript": "^5.9.3" }
 }
