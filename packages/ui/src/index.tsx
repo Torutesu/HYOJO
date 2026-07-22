@@ -111,6 +111,7 @@ export function HuddlePanel({
   transcriptDraft: string;
   setTranscriptDraft: (value: string) => void;
 }) {
+  const recordingMode = huddle.recordingPolicy?.mode ?? "required";
   return (
     <section className="hyojo-card hyojo-huddle">
       <div className="hyojo-card-kicker">Huddle</div>
@@ -119,7 +120,7 @@ export function HuddlePanel({
       <div className="hyojo-meta">
         <Pill>{huddle.status}</Pill>
         <Pill>{huddle.transcript.state}</Pill>
-        <Pill>{huddle.recordingPolicy.mode}</Pill>
+        <Pill>{recordingMode}</Pill>
       </div>
       <div className="hyojo-actions">
         <button className="hyojo-button hyojo-button-primary" onClick={onJoin}>参加する</button>
