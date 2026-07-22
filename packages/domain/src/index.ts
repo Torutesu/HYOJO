@@ -32,3 +32,25 @@ export type Narration = {
 export type SpeakRequest = { text: string; actorId: string };
 
 export type SpeakResponse = { narration: Narration; auditEvents: AuditEvent[] };
+
+export type HuddleStatus = "proposed" | "active" | "completed" | "recording_off";
+
+export type Huddle = {
+  id: string;
+  spaceId: string;
+  title: string;
+  participants: string[];
+  status: HuddleStatus;
+  recordingPolicy: RecordingPolicy;
+  recordingDisclosure: string;
+  createdAt: string;
+};
+
+export type HuddleMemory = {
+  huddleId: string;
+  summary: string;
+  decisions: string[];
+  todos: Array<{ owner: string; text: string }>;
+  source: "transcript" | "manual";
+  createdAt: string;
+};

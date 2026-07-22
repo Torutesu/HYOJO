@@ -10,3 +10,9 @@ export async function speak(text: string): Promise<SpeakResponse> {
   if (!response.ok) throw new Error("Speak request failed");
   return response.json() as Promise<SpeakResponse>;
 }
+
+export async function createHuddle() {
+  const response = await fetch(`${apiBaseUrl}/v1/huddles`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "返金ポリシーを決める", participants: ["toru", "sarah"], spaceId: "product", recordingPolicy: "required" }) });
+  if (!response.ok) throw new Error("Huddle request failed");
+  return response.json() as Promise<{ huddle: { id: string; recordingDisclosure: string } }>;
+}

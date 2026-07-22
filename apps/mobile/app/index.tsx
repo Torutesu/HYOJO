@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
+import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import type { Narration } from "@hyojo/domain";
 import { speak } from "../src/api";
@@ -33,7 +34,7 @@ export default function Home() {
         <Text style={styles.cardLabel}>AI が今の判断用にまとめました</Text>
         <Text style={styles.cardTitle}>{narration.surface.title}</Text>
         <Text style={styles.rationale}>{narration.surface.rationale}</Text>
-        <View style={styles.actions}><Pressable style={styles.primary}><Text style={styles.primaryText}>{narration.surface.primaryLabel}</Text></Pressable><Pressable style={styles.secondary}><Text>{narration.surface.secondaryLabel}</Text></Pressable></View>
+        <View style={styles.actions}><Pressable onPress={() => router.push("/huddle")} style={styles.primary}><Text style={styles.primaryText}>{narration.surface.primaryLabel}</Text></Pressable><Pressable style={styles.secondary}><Text>{narration.surface.secondaryLabel}</Text></Pressable></View>
       </View>}
       <Text style={styles.status}>{status}</Text>
     </View>
