@@ -4,6 +4,7 @@ import { z } from "zod";
 import { isAllowedSurface } from "@hyojo/adaptive-ui";
 import type { AuditEvent, Huddle, HuddleMemory, RecordingPolicy, SpeakResponse } from "@hyojo/domain";
 import { createRecordingProvider } from "./recording.js";
+import { canAccessSpace, principalFrom } from "./access.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -12,6 +13,7 @@ export async function buildApp() {
   const events: AuditEvent[] = [];
   const huddles = new Map<string, Huddle>();
   const memories = new Map<string, HuddleMemory>();
+  const spacePolicies = new Map<string, RecordingPolicy>([["product", { mode: "required", videoRetentionDays: 30, transcriptRetentionDays: 365, allowMemoryIndexing: true }]]);
   const recordingProvider = createRecordingProvider();
   const speakSchema = z.object({ text: z.string().trim().min(1).max(2_000), actorId: z.string().min(1) });
   const huddleSchema = z.object({ title: z.string().trim().min(1).max(160), participants: z.array(z.string().min(1)).min(1), spaceId: z.string().min(1), recordingPolicy: z.enum(["required", "optional", "off"]).default("required") });
@@ -19,17 +21,33 @@ export async function buildApp() {
 
   app.get("/health", async () => ({ ok: true, service: "hyojo-api" }));
   app.get("/v1/audit-events", async () => ({ events }));
+  app.get("/v1/spaces/:spaceId/recording-policy", async (request, reply) => {
+    const principal = principalFrom(request); const { spaceId } = request.params as { spaceId: string };
+    if (!principal || !canAccessSpace(principal, spaceId)) return reply.status(403).send({ error: "Space access denied" });
+    return { policy: spacePolicies.get(spaceId) ?? { mode: "optional", videoRetentionDays: 30, transcriptRetentionDays: 365, allowMemoryIndexing: true } };
+  });
+  app.patch("/v1/spaces/:spaceId/recording-policy", async (request, reply) => {
+    const principal = principalFrom(request); const { spaceId } = request.params as { spaceId: string };
+    if (!principal || principal.role !== "admin" || !canAccessSpace(principal, spaceId)) return reply.status(403).send({ error: "Admin space access required" });
+    const parsed = z.object({ mode: z.enum(["required", "optional", "off"]), videoRetentionDays: z.number().int().min(0).max(3650), transcriptRetentionDays: z.number().int().min(0).max(3650), allowMemoryIndexing: z.boolean() }).safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: "Invalid recording policy" });
+    spacePolicies.set(spaceId, parsed.data);
+    events.unshift({ id: crypto.randomUUID(), action: "routing_decided", actorId: principal.id, occurredAt: new Date().toISOString(), reversible: true, metadata: { operation: "recording_policy_changed", spaceId } });
+    return { policy: parsed.data };
+  });
   app.get("/v1/huddles/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
     const huddle = huddles.get(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
+    const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
     return { huddle, memory: memories.get(id) ?? null };
   });
   app.post("/v1/huddles", async (request, reply) => {
     const parsed = huddleSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: "Invalid Huddle payload" });
+    const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, parsed.data.spaceId)) return reply.status(403).send({ error: "Space access denied" });
     const now = new Date().toISOString();
-    const policy: RecordingPolicy = { mode: parsed.data.recordingPolicy, videoRetentionDays: 30, transcriptRetentionDays: 365, allowMemoryIndexing: parsed.data.recordingPolicy !== "off" };
+    const policy = spacePolicies.get(parsed.data.spaceId) ?? { mode: parsed.data.recordingPolicy, videoRetentionDays: 30, transcriptRetentionDays: 365, allowMemoryIndexing: parsed.data.recordingPolicy !== "off" };
     const huddle: Huddle = {
       id: crypto.randomUUID(), spaceId: parsed.data.spaceId, title: parsed.data.title, participants: parsed.data.participants,
       status: policy.mode === "off" ? "recording_off" : "proposed", recordingPolicy: policy,
@@ -45,6 +63,7 @@ export async function buildApp() {
     const { id } = request.params as { id: string };
     const huddle = huddles.get(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
+    const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
     if (huddle.status === "proposed" && huddle.recordingPolicy.mode !== "off") {
       try {
         const recording = await recordingProvider.start(huddle);
@@ -60,6 +79,7 @@ export async function buildApp() {
     const { id } = request.params as { id: string };
     const huddle = huddles.get(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
+    const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
     const parsed = completeSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: "Invalid completion payload" });
     huddle.status = "completed";

@@ -16,6 +16,9 @@ export type RecordingPolicy = {
   allowMemoryIndexing: boolean;
 };
 
+export type Role = "member" | "admin";
+export type Principal = { id: string; role: Role; spaceIds: string[] };
+
 export type AdaptiveSurface =
   | { kind: "approval"; id: string; title: string; rationale: string; primaryLabel: string; secondaryLabel: string }
   | { kind: "comparison"; id: string; title: string; options: Array<{ label: string; detail: string; recommended?: boolean }> }
