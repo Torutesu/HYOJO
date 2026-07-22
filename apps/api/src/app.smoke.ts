@@ -2,7 +2,8 @@ import { buildApp } from "./app.js";
 
 const app = await buildApp();
 const ready = await app.inject({ method: "GET", url: "/readyz" });
-if (ready.statusCode !== 200 || ready.json().storage.persistent !== false) throw new Error("Development readiness failed");
+const usesPersistentStore = Boolean(process.env.DATABASE_URL);
+if (ready.statusCode !== 200 || ready.json().storage.persistent !== usesPersistentStore) throw new Error("Storage readiness failed");
 const response = await app.inject({ method: "POST", url: "/v1/speak", headers: { "x-hyojo-actor": "toru" }, payload: { text: "Sarah と5分話したい" } });
 if (response.statusCode !== 200) throw new Error(`Speak failed: ${response.statusCode}`);
 const payload = response.json();
