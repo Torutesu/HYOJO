@@ -6,10 +6,6 @@ import { DecisionCard, NarrationCard, Pill, SourceSheet, SpeakComposer } from "@
 import { approveSurface, completeActionItem, completeHuddle, createHuddle, defaultNarration, getApiBaseUrl, getLocalSnapshot, getHuddleConnection, joinHuddle, listActionItems, listHuddles, sendTranscript, speak, type ActionItem } from "../src/lib/api";
 import type { Huddle, HuddleMemory, Narration } from "@hyojo/domain";
 
-function formatTimestamp(value: string) {
-  return new Date(value).toISOString().slice(0, 16).replace("T", " ");
-}
-
 type FeedItem =
   | { id: string; kind: "decision"; title: string; rationale: string; primaryLabel: string; secondaryLabel: string }
   | { id: string; kind: "intro"; narration: Narration }
@@ -19,25 +15,89 @@ type FeedItem =
   | { id: string; kind: "speak" }
   | { id: string; kind: "detail"; huddle: Huddle | null };
 
+type SeedSnapshot = {
+  narration: Narration;
+  huddles: Huddle[];
+  memories: Record<string, HuddleMemory>;
+  actionItems: ActionItem[];
+  approvals: Array<{ id: string; approvedAt: string }>;
+};
+
+function makeSeedSnapshot(): SeedSnapshot {
+  const huddle = createHuddleSeed();
+  const memory: HuddleMemory = {
+    huddleId: huddle.id,
+    summary: "返金ポリシーの判断を、48時間案を軸に進める。",
+    decisions: ["決済完了から48時間以内は全額返金"],
+    todos: [{ owner: "AI", text: "CSマニュアルを更新する" }],
+    source: "manual",
+    createdAt: "2026-07-22T00:00:00.000Z"
+  };
+  return {
+    narration: defaultNarration,
+    huddles: [huddle],
+    memories: { [huddle.id]: memory },
+    actionItems: [{ huddleId: huddle.id, huddleTitle: huddle.title, owner: "AI", text: "CSマニュアルを更新する" }],
+    approvals: []
+  };
+}
+
+function createHuddleSeed(): Huddle {
+  return {
+    id: "demo-huddle-refund-48h",
+    spaceId: "product",
+    title: "返金ポリシーを決める",
+    participants: ["toru", "sarah"],
+    status: "proposed",
+    recordingPolicy: {
+      mode: "required",
+      videoRetentionDays: 30,
+      transcriptRetentionDays: 365,
+      allowMemoryIndexing: true
+    },
+    recordingDisclosure: "録画・文字起こし中。参加者全員に表示されます。",
+    recording: { provider: "memory", state: "not_started" },
+    transcript: { state: "pending" },
+    createdAt: "2026-07-22T00:00:00.000Z"
+  };
+}
+
 export default function HomePage() {
-  const [snapshot] = useState(() => getLocalSnapshot());
-  const [narration, setNarration] = useState<Narration>(snapshot.narration ?? defaultNarration);
+  const [, setSnapshot] = useState<SeedSnapshot>(() => makeSeedSnapshot());
+  const [narration, setNarration] = useState<Narration>(defaultNarration);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState("準備中");
-  const [huddles, setHuddles] = useState<Huddle[]>(snapshot.huddles.slice(0, 4));
-  const [actions, setActions] = useState<ActionItem[]>(snapshot.actionItems.slice(0, 4));
-  const [activeHuddle, setActiveHuddle] = useState<Huddle | null>(snapshot.huddles[0] ?? null);
-  const [activeMemory, setActiveMemory] = useState<HuddleMemory | null>(snapshot.memories[snapshot.huddles[0]?.id ?? ""] ?? null);
+  const seedSnapshot = makeSeedSnapshot();
+  const [huddles, setHuddles] = useState<Huddle[]>(seedSnapshot.huddles.slice(0, 4));
+  const [actions, setActions] = useState<ActionItem[]>(seedSnapshot.actionItems.slice(0, 4));
+  const [activeHuddle, setActiveHuddle] = useState<Huddle | null>(seedSnapshot.huddles[0] ?? null);
+  const [activeMemory, setActiveMemory] = useState<HuddleMemory | null>(seedSnapshot.memories[seedSnapshot.huddles[0]?.id ?? ""] ?? null);
   const [transcriptDraft, setTranscriptDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [focusId, setFocusId] = useState(() => {
-    if (snapshot.huddles[0]) return `huddle-${snapshot.huddles[0].id}`;
-    if (snapshot.narration.surface?.kind === "approval") return `decision-${snapshot.narration.surface.id}`;
-    return `intro-${snapshot.narration.id}`;
+    if (seedSnapshot.huddles[0]) return `huddle-${seedSnapshot.huddles[0].id}`;
+    if (seedSnapshot.narration.surface?.kind === "approval") return `decision-${seedSnapshot.narration.surface.id}`;
+    return `intro-${seedSnapshot.narration.id}`;
   });
 
   useEffect(() => {
     let mounted = true;
+    const liveSnapshot = getLocalSnapshot();
+    if (mounted) {
+      setSnapshot(liveSnapshot);
+      setNarration(liveSnapshot.narration ?? defaultNarration);
+      setHuddles(liveSnapshot.huddles.slice(0, 4));
+      setActions(liveSnapshot.actionItems.slice(0, 4));
+      setActiveHuddle(liveSnapshot.huddles[0] ?? null);
+      setActiveMemory(liveSnapshot.memories[liveSnapshot.huddles[0]?.id ?? ""] ?? null);
+      if (liveSnapshot.huddles[0]) {
+        setFocusId(`huddle-${liveSnapshot.huddles[0].id}`);
+      } else if (liveSnapshot.narration.surface?.kind === "approval") {
+        setFocusId(`decision-${liveSnapshot.narration.surface.id}`);
+      } else {
+        setFocusId(`intro-${liveSnapshot.narration.id}`);
+      }
+    }
     Promise.all([listHuddles(), listActionItems()])
       .then(([huddleData, actionData]) => {
         if (!mounted) return;
@@ -103,15 +163,6 @@ export default function HomePage() {
       setFocusId(feedItems[0].id);
     }
   }, [feedItems, focusId]);
-
-  const currentIndex = Math.max(feedItems.findIndex((item) => item.id === focusId), 0);
-  const currentItem = feedItems[currentIndex] ?? feedItems[0];
-  const nextItems = feedItems.slice(currentIndex + 1, currentIndex + 3);
-
-  function advanceFocus() {
-    const next = nextItems[0];
-    if (next) setFocusId(next.id);
-  }
 
   async function submitSpeak() {
     if (!draft.trim() || busy) return;
@@ -204,7 +255,7 @@ export default function HomePage() {
       await completeActionItem(item.huddleId, item.owner, item.text);
       setActions((current) => current.filter((action) => !(action.huddleId === item.huddleId && action.owner === item.owner && action.text === item.text)));
       setStatus("TODO を完了しました");
-      advanceFocus();
+      setFocusId(`action-${item.huddleId}-${item.owner}-${item.text}`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "TODO を完了できませんでした");
     }
@@ -212,210 +263,176 @@ export default function HomePage() {
 
   return (
     <main className="hyojo-shell hyojo-feed-shell">
-      <div className="hyojo-feed">
-        <header className="hyojo-feed-top">
+      <div className="hyojo-tiktok-feed">
+        <header className="hyojo-feed-top hyojo-feed-top-overlay">
           <div className="hyojo-brand">
             <div className="hyojo-brand-mark">HYOJO</div>
-            <Pill>dev actor · toru</Pill>
-          </div>
-          <div className="hyojo-feed-hero">
-            <div>
-              <div className="hyojo-kicker">AI-native company OS</div>
-              <h1>仕事が、下から自然に出てくる。</h1>
-            </div>
-            <p className="hyojo-copy">
-              いま向き合うべき文脈を1枚にまとめ、終わったら次の話題が下から出てくる。
-              情報の一覧ではなく、前に進むためのフィードです。
-            </p>
-            <div className="hyojo-rail">
-              <Pill>web app</Pill>
-              <Pill>{apiState}</Pill>
-              <Pill>feed-first</Pill>
-              <Pill>{status}</Pill>
-              <Pill>{huddles.length} huddles</Pill>
-            </div>
+            <Pill>feed-first</Pill>
           </div>
         </header>
+        {feedItems.map((item, index) => {
+          const sourceHref = item.kind === "huddle"
+            ? `/detail/${item.huddle.id}`
+            : item.kind === "memory"
+              ? `/huddle/${item.huddle.id}`
+              : item.kind === "action"
+                ? `/huddle/${item.item.huddleId}`
+                : item.kind === "detail"
+                  ? item.huddle ? `/detail/${item.huddle.id}` : "/"
+                  : activeHuddle ? `/detail/${activeHuddle.id}` : "/";
+          const sourceLabel = item.kind === "huddle"
+            ? "元ソース: Detail"
+            : item.kind === "memory"
+              ? "元ソース: Huddle"
+              : item.kind === "action"
+                ? "元ソース: Huddle"
+                : item.kind === "decision"
+                  ? "元ソース: Detail"
+                  : item.kind === "detail"
+                    ? "元ソース: Detail"
+                    : "元ソース: Detail";
 
-        <section className="hyojo-feed-stage">
-          <div key={currentItem?.id ?? "empty"} className={`hyojo-feed-card hyojo-feed-card-${currentItem?.kind ?? "intro"}`}>
-            <div className="hyojo-feed-card-head">
-              <div>
-                <div className="hyojo-kicker">Now</div>
-                <h2 className="hyojo-section-title">
-                  {currentItem?.kind === "huddle"
-                    ? currentItem.huddle.title
-                    : currentItem?.kind === "memory"
-                      ? `${currentItem.huddle.title} の記録`
-                      : currentItem?.kind === "action"
-                        ? currentItem.item.text
-                        : currentItem?.kind === "decision"
-                          ? currentItem.title
-                          : currentItem?.kind === "detail"
-                            ? currentItem.huddle?.title ?? "次の文脈を準備中"
-                            : "宛先を選ばずに話す"}
-                </h2>
-              </div>
-              <Pill>{currentItem?.kind ?? "intro"}</Pill>
-            </div>
+          return (
+            <section key={item.id} className={`hyojo-tiktok-card hyojo-tiktok-card-${item.kind} ${focusId === item.id ? "is-active" : ""}`} onClick={() => setFocusId(item.id)}>
+              <div className="hyojo-tiktok-card-inner">
+                <div className="hyojo-tiktok-topbar">
+                  <Pill>{index + 1}/{feedItems.length}</Pill>
+                  <Pill>{item.kind}</Pill>
+                  <Link className="hyojo-source-link" href={sourceHref}>{sourceLabel}</Link>
+                </div>
 
-            <div className="hyojo-feed-card-body">
-              {currentItem?.kind === "decision" ? (
-                <DecisionCard
-                  title={currentItem.title}
-                  rationale={currentItem.rationale}
-                  primaryLabel={currentItem.primaryLabel}
-                  secondaryLabel={currentItem.secondaryLabel}
-                  onPrimary={() => void openDecisionDetail()}
-                  onSecondary={() => setStatus("詳しくは次の Huddle にまとめています")}
-                  onDetail={() => setStatus("詳しくは次の Huddle にまとめています")}
-                />
-              ) : null}
-
-              {currentItem?.kind === "intro" ? <NarrationCard narration={currentItem.narration} /> : null}
-
-              {currentItem?.kind === "huddle" ? (
-                <section className="hyojo-card hyojo-feed-block hyojo-feed-block-huddle">
-                  <div className="hyojo-card-kicker">Huddle</div>
-                  <div className="hyojo-card-title">{currentItem.huddle.title}</div>
-                  <p className="hyojo-copy">{currentItem.huddle.recordingDisclosure}</p>
-                  <div className="hyojo-meta">
-                    <Pill>{currentItem.huddle.status}</Pill>
-                    <Pill>{currentItem.huddle.transcript.state}</Pill>
-                    <Pill>{currentItem.huddle.recordingPolicy?.mode ?? "required"}</Pill>
+                <div className="hyojo-feed-card-head">
+                  <div>
+                    <div className="hyojo-kicker">Now</div>
+                    <h2 className="hyojo-section-title">
+                      {item.kind === "huddle"
+                        ? item.huddle.title
+                        : item.kind === "memory"
+                          ? `${item.huddle.title} の記録`
+                          : item.kind === "action"
+                            ? item.item.text
+                            : item.kind === "decision"
+                              ? item.title
+                              : item.kind === "detail"
+                                ? item.huddle?.title ?? "次の文脈"
+                                : "宛先を選ばずに話す"}
+                    </h2>
                   </div>
-                  {currentItem.memory ? (
-                    <div className="hyojo-feed-inline-card">
-                      <div className="hyojo-sheet-title">Memory</div>
-                      <p className="hyojo-copy">{currentItem.memory.summary}</p>
-                    </div>
+                </div>
+
+                <div className="hyojo-feed-card-body">
+                  {item.kind === "decision" ? (
+                    <DecisionCard
+                      title={item.title}
+                      rationale={item.rationale}
+                      primaryLabel={item.primaryLabel}
+                      secondaryLabel={item.secondaryLabel}
+                      onPrimary={() => void openDecisionDetail()}
+                      onSecondary={() => setStatus("詳しくは元ソースに戻れます")}
+                      onDetail={() => setStatus("詳しくは元ソースに戻れます")}
+                    />
                   ) : null}
-                  <div className="hyojo-actions">
-                    <button className="hyojo-button hyojo-button-primary" onClick={() => void handleJoinHuddle()}>参加する</button>
-                    <button className="hyojo-button hyojo-button-secondary" onClick={() => void handleRequestToken()}>接続を取る</button>
-                    <button className="hyojo-button hyojo-button-ghost" onClick={() => void handleCompleteHuddle()}>完了</button>
-                  </div>
-                </section>
-              ) : null}
 
-              {currentItem?.kind === "memory" ? (
-                <section className="hyojo-card hyojo-feed-block hyojo-feed-block-memory">
-                  <div className="hyojo-card-kicker">Next context</div>
-                  <div className="hyojo-card-title">{currentItem.huddle.title} の要約</div>
-                  <p className="hyojo-copy">{currentItem.memory.summary}</p>
-                  <div className="hyojo-memory-list">
-                    {currentItem.memory.decisions.map((decision) => <Pill key={decision}>{decision}</Pill>)}
-                  </div>
-                  <div className="hyojo-memory-list">
-                    {currentItem.memory.todos.slice(0, 2).map((todo) => (
-                      <div className="hyojo-todo" key={`${todo.owner}-${todo.text}`}>
-                        <div>
-                          <div className="hyojo-todo-owner">{todo.owner}</div>
-                          <div className="hyojo-todo-text">{todo.text}</div>
-                        </div>
-                        <div className="hyojo-status">{todo.completedAt ? "完了" : "未完了"}</div>
+                  {item.kind === "intro" ? <NarrationCard narration={item.narration} /> : null}
+
+                  {item.kind === "huddle" ? (
+                    <section className="hyojo-card hyojo-feed-block hyojo-feed-block-huddle">
+                      <div className="hyojo-card-kicker">Huddle</div>
+                      <div className="hyojo-card-title">{item.huddle.title}</div>
+                      <p className="hyojo-copy">{item.huddle.recordingDisclosure}</p>
+                      <div className="hyojo-meta">
+                        <Pill>{item.huddle.status}</Pill>
+                        <Pill>{item.huddle.transcript.state}</Pill>
+                        <Pill>{item.huddle.recordingPolicy?.mode ?? "required"}</Pill>
                       </div>
-                    ))}
-                  </div>
-                  <div className="hyojo-actions">
-                    <Link className="hyojo-button hyojo-button-primary" href={`/detail/${currentItem.huddle.id}`}>Detail を開く</Link>
-                    <button className="hyojo-button hyojo-button-secondary" onClick={advanceFocus}>次へ</button>
-                  </div>
-                </section>
-              ) : null}
+                      {item.memory ? (
+                        <div className="hyojo-feed-inline-card">
+                          <div className="hyojo-sheet-title">Memory</div>
+                          <p className="hyojo-copy">{item.memory.summary}</p>
+                        </div>
+                      ) : null}
+                      <div className="hyojo-actions">
+                        <button className="hyojo-button hyojo-button-primary" onClick={() => void handleJoinHuddle()}>参加する</button>
+                        <button className="hyojo-button hyojo-button-secondary" onClick={() => void handleRequestToken()}>接続を取る</button>
+                        <button className="hyojo-button hyojo-button-ghost" onClick={() => void handleCompleteHuddle()}>完了</button>
+                      </div>
+                    </section>
+                  ) : null}
 
-              {currentItem?.kind === "action" ? (
-                <section className="hyojo-card hyojo-feed-block hyojo-feed-block-action">
-                  <div className="hyojo-card-kicker">Task</div>
-                  <div className="hyojo-card-title">{currentItem.item.text}</div>
-                  <p className="hyojo-copy">{currentItem.item.owner} · {currentItem.item.huddleTitle}</p>
-                  <div className="hyojo-actions">
-                    <button className="hyojo-button hyojo-button-primary" onClick={() => void handleCompleteAction(currentItem.item)}>完了</button>
-                    <Link className="hyojo-button hyojo-button-secondary" href={`/huddle/${currentItem.item.huddleId}`}>Huddle を見る</Link>
-                  </div>
-                </section>
-              ) : null}
+                  {item.kind === "memory" ? (
+                    <section className="hyojo-card hyojo-feed-block hyojo-feed-block-memory">
+                      <div className="hyojo-card-kicker">Next context</div>
+                      <div className="hyojo-card-title">{item.huddle.title} の要約</div>
+                      <p className="hyojo-copy">{item.memory.summary}</p>
+                      <div className="hyojo-memory-list">
+                        {item.memory.decisions.map((decision) => <Pill key={decision}>{decision}</Pill>)}
+                      </div>
+                      <div className="hyojo-memory-list">
+                        {item.memory.todos.slice(0, 2).map((todo) => (
+                          <div className="hyojo-todo" key={`${todo.owner}-${todo.text}`}>
+                            <div>
+                              <div className="hyojo-todo-owner">{todo.owner}</div>
+                              <div className="hyojo-todo-text">{todo.text}</div>
+                            </div>
+                            <div className="hyojo-status">{todo.completedAt ? "完了" : "未完了"}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="hyojo-actions">
+                        <Link className="hyojo-button hyojo-button-primary" href={`/detail/${item.huddle.id}`}>Detail を開く</Link>
+                      </div>
+                    </section>
+                  ) : null}
 
-              {currentItem?.kind === "speak" ? (
-                <section className="hyojo-card hyojo-feed-block hyojo-feed-block-speak">
-                  <div className="hyojo-card-kicker">Speak</div>
-                  <div className="hyojo-card-title">宛先を選ばずに話す</div>
-                  <p className="hyojo-copy">ひとこと入れると、次に進むための判断や Huddle が下から出てきます。</p>
-                  <SpeakComposer
-                    value={draft}
-                    onChange={setDraft}
-                    onSubmit={() => void submitSpeak()}
-                    status={busy ? "送信中" : "そのまま話してください"}
-                  />
-                </section>
-              ) : null}
+                  {item.kind === "action" ? (
+                    <section className="hyojo-card hyojo-feed-block hyojo-feed-block-action">
+                      <div className="hyojo-card-kicker">Task</div>
+                      <div className="hyojo-card-title">{item.item.text}</div>
+                      <p className="hyojo-copy">{item.item.owner} · {item.item.huddleTitle}</p>
+                      <div className="hyojo-actions">
+                        <button className="hyojo-button hyojo-button-primary" onClick={() => void handleCompleteAction(item.item)}>完了</button>
+                        <Link className="hyojo-button hyojo-button-secondary" href={`/huddle/${item.item.huddleId}`}>Huddle を見る</Link>
+                      </div>
+                    </section>
+                  ) : null}
 
-              {currentItem?.kind === "detail" ? (
-                <section className="hyojo-card hyojo-feed-block hyojo-feed-block-detail">
-                  <div className="hyojo-card-kicker">Detail</div>
-                  <div className="hyojo-card-title">{currentItem.huddle?.title ?? "次の文脈"}</div>
-                  <SourceSheet
-                    title="このカードの意味"
-                    items={[
-                      { label: "今", value: currentItem.huddle ? "Huddle の本体を開く前の入口" : "次の文脈を準備中", tone: "good" },
-                      { label: "流れ", value: "完了したら下のカードへ自然に遷移", tone: "warn" },
-                      { label: "表示", value: "一覧ではなく、1つの仕事を前に出す", tone: "muted" }
-                    ]}
-                  />
-                  <div className="hyojo-actions">
-                    {currentItem.huddle ? <Link className="hyojo-button hyojo-button-primary" href={`/huddle/${currentItem.huddle.id}`}>Huddle を開く</Link> : null}
-                    <button className="hyojo-button hyojo-button-secondary" onClick={advanceFocus}>次へ</button>
-                  </div>
-                </section>
-              ) : null}
-            </div>
-          </div>
-        </section>
+                  {item.kind === "speak" ? (
+                    <section className="hyojo-card hyojo-feed-block hyojo-feed-block-speak">
+                      <div className="hyojo-card-kicker">Speak</div>
+                      <div className="hyojo-card-title">宛先を選ばずに話す</div>
+                      <p className="hyojo-copy">ひとこと入れると、次に進むための判断や Huddle が下から出てきます。</p>
+                      <SpeakComposer
+                        value={draft}
+                        onChange={setDraft}
+                        onSubmit={() => void submitSpeak()}
+                        status={busy ? "送信中" : "そのまま話してください"}
+                      />
+                    </section>
+                  ) : null}
 
-        <section className="hyojo-feed-next">
-          <div className="hyojo-feed-next-head">
-            <div>
-              <div className="hyojo-kicker">Next up</div>
-              <h3 className="hyojo-section-title">下から出てくる次の文脈</h3>
-            </div>
-            <Pill>{nextItems.length} items</Pill>
-          </div>
-          <div className="hyojo-feed-next-list">
-            {nextItems.map((item) => (
-              <button key={item.id} className="hyojo-next-card" onClick={() => setFocusId(item.id)}>
-                <div className="hyojo-next-card-title">
-                  {item.kind === "action"
-                    ? item.item.text
-                    : item.kind === "huddle"
-                      ? item.huddle.title
-                      : item.kind === "memory"
-                        ? `${item.huddle.title} の Memory`
-                        : item.kind === "decision"
-                          ? item.title
-                          : item.kind === "detail"
-                            ? "Detail"
-                            : "Speak"}
+                  {item.kind === "detail" ? (
+                    <section className="hyojo-card hyojo-feed-block hyojo-feed-block-detail">
+                      <div className="hyojo-card-kicker">Detail</div>
+                      <div className="hyojo-card-title">{item.huddle?.title ?? "次の文脈"}</div>
+                      <SourceSheet
+                        title="元の情報"
+                        items={[
+                          { label: "今", value: item.huddle ? "Huddle の本体を開く前の入口" : "次の文脈を準備中", tone: "good" },
+                          { label: "流れ", value: "一覧ではなく、1つの仕事を前に出す", tone: "warn" },
+                          { label: "場所", value: "WebView 前提のモバイル UI", tone: "muted" }
+                        ]}
+                      />
+                      <div className="hyojo-actions">
+                        {item.huddle ? <Link className="hyojo-button hyojo-button-primary" href={`/huddle/${item.huddle.id}`}>Huddle を開く</Link> : null}
+                        {item.huddle ? <Link className="hyojo-button hyojo-button-secondary" href={`/detail/${item.huddle.id}`}>元ソース</Link> : null}
+                      </div>
+                    </section>
+                  ) : null}
                 </div>
-                <div className="hyojo-next-card-meta">
-                  {item.kind === "action"
-                    ? `${item.item.owner} · タスク`
-                    : item.kind === "huddle"
-                      ? `${item.huddle.status} · Huddle · ${formatTimestamp(item.huddle.createdAt)}`
-                      : item.kind === "memory"
-                        ? "要約と TODO"
-                        : item.kind === "decision"
-                          ? "判断の入口"
-                          : item.kind === "detail"
-                            ? "背景を開く"
-                            : "声で流れを作る"}
-                </div>
-              </button>
-            ))}
-            {nextItems.length === 0 ? (
-              <div className="hyojo-banner">ここまで来たら、今のカードに集中すれば大丈夫です。</div>
-            ) : null}
-          </div>
-        </section>
+              </div>
+            </section>
+          );
+        })}
       </div>
     </main>
   );
