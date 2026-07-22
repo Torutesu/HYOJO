@@ -1,7 +1,7 @@
 import { buildApp } from "./app.js";
 
 const app = await buildApp();
-const response = await app.inject({ method: "POST", url: "/v1/speak", payload: { text: "Sarah と5分話したい", actorId: "toru" } });
+const response = await app.inject({ method: "POST", url: "/v1/speak", headers: { "x-hyojo-actor": "toru" }, payload: { text: "Sarah と5分話したい" } });
 if (response.statusCode !== 200) throw new Error(`Speak failed: ${response.statusCode}`);
 const payload = response.json();
 if (payload.narration?.surface?.kind !== "approval" || payload.auditEvents?.length !== 2) throw new Error("Unexpected Speak response");
@@ -20,3 +20,11 @@ const forbidden = await app.inject({ method: "GET", url: "/v1/spaces/product/rec
 if (forbidden.statusCode !== 403) throw new Error("ACL boundary failed");
 console.log("Speak smoke test passed");
 await app.close();
+
+const previousAuthMode = process.env.HYOJO_AUTH_MODE;
+process.env.HYOJO_AUTH_MODE = "production";
+const productionApp = await buildApp();
+const spoofedHeader = await productionApp.inject({ method: "POST", url: "/v1/speak", headers: { "x-hyojo-actor": "toru" }, payload: { text: "This must not trust a header in production." } });
+if (spoofedHeader.statusCode !== 401) throw new Error("Production header spoofing boundary failed");
+await productionApp.close();
+if (previousAuthMode === undefined) delete process.env.HYOJO_AUTH_MODE; else process.env.HYOJO_AUTH_MODE = previousAuthMode;

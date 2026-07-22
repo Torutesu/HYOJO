@@ -14,7 +14,7 @@ export async function buildApp() {
 
   const store = createStore();
   const recordingProvider = createRecordingProvider();
-  const speakSchema = z.object({ text: z.string().trim().min(1).max(2_000), actorId: z.string().min(1) });
+  const speakSchema = z.object({ text: z.string().trim().min(1).max(2_000) });
   const huddleSchema = z.object({ title: z.string().trim().min(1).max(160), participants: z.array(z.string().min(1)).min(1), spaceId: z.string().min(1), recordingPolicy: z.enum(["required", "optional", "off"]).default("required") });
   const transcriptSchema = z.object({ text: z.string().trim().min(1).max(50_000), language: z.string().trim().min(2).max(16).optional() });
 
@@ -27,12 +27,12 @@ export async function buildApp() {
   app.addHook("onClose", async () => { await store.close(); });
   app.get("/v1/audit-events", async () => ({ events: await store.listAuditEvents() }));
   app.get("/v1/spaces/:spaceId/recording-policy", async (request, reply) => {
-    const principal = principalFrom(request); const { spaceId } = request.params as { spaceId: string };
+    const principal = await principalFrom(request); const { spaceId } = request.params as { spaceId: string };
     if (!principal || !canAccessSpace(principal, spaceId)) return reply.status(403).send({ error: "Space access denied" });
     return { policy: await store.getPolicy(spaceId) ?? { mode: "optional", videoRetentionDays: 30, transcriptRetentionDays: 365, allowMemoryIndexing: true } };
   });
   app.patch("/v1/spaces/:spaceId/recording-policy", async (request, reply) => {
-    const principal = principalFrom(request); const { spaceId } = request.params as { spaceId: string };
+    const principal = await principalFrom(request); const { spaceId } = request.params as { spaceId: string };
     if (!principal || principal.role !== "admin" || !canAccessSpace(principal, spaceId)) return reply.status(403).send({ error: "Admin space access required" });
     const parsed = z.object({ mode: z.enum(["required", "optional", "off"]), videoRetentionDays: z.number().int().min(0).max(3650), transcriptRetentionDays: z.number().int().min(0).max(3650), allowMemoryIndexing: z.boolean() }).safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: "Invalid recording policy" });
@@ -44,14 +44,14 @@ export async function buildApp() {
     const { id } = request.params as { id: string };
     const huddle = await store.getHuddle(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
-    const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
+    const principal = await principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
     const transcript = await store.getTranscript(id);
     return { huddle, memory: await store.getMemory(id) ?? null, transcript: transcript ? { state: "received", receivedAt: transcript.receivedAt } : huddle.transcript };
   });
   app.post("/v1/huddles", async (request, reply) => {
     const parsed = huddleSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: "Invalid Huddle payload" });
-    const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, parsed.data.spaceId)) return reply.status(403).send({ error: "Space access denied" });
+    const principal = await principalFrom(request); if (!principal || !canAccessSpace(principal, parsed.data.spaceId)) return reply.status(403).send({ error: "Space access denied" });
     const now = new Date().toISOString();
     const policy = await store.getPolicy(parsed.data.spaceId) ?? { mode: parsed.data.recordingPolicy, videoRetentionDays: 30, transcriptRetentionDays: 365, allowMemoryIndexing: parsed.data.recordingPolicy !== "off" };
     const huddle: Huddle = {
@@ -70,7 +70,7 @@ export async function buildApp() {
     const { id } = request.params as { id: string };
     const huddle = await store.getHuddle(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
-    const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
+    const principal = await principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
     if (huddle.status === "proposed" && huddle.recordingPolicy.mode !== "off") {
       try {
         const recording = await recordingProvider.start(huddle);
@@ -87,7 +87,7 @@ export async function buildApp() {
     const { id } = request.params as { id: string };
     const huddle = await store.getHuddle(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
-    const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
+    const principal = await principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
     if (huddle.status === "proposed") return reply.status(409).send({ error: "Join the Huddle before requesting a connection token" });
     if (huddle.status === "completed") return reply.status(409).send({ error: "This Huddle has already ended" });
     try {
@@ -100,7 +100,7 @@ export async function buildApp() {
     const { id } = request.params as { id: string };
     const huddle = await store.getHuddle(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
-    const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
+    const principal = await principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
     if (huddle.status === "completed") return { huddle, memory: await store.getMemory(id) ?? null };
     huddle.status = "completed";
     if (huddle.recording.state === "recording") { await recordingProvider.stop(huddle.recording.externalId); huddle.recording.state = "stopped"; }
@@ -112,7 +112,7 @@ export async function buildApp() {
     const { id } = request.params as { id: string };
     const huddle = await store.getHuddle(id);
     if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
-    const principal = principalFrom(request);
+    const principal = await principalFrom(request);
     const trustedIngest = canIngestTranscript(request);
     if (!trustedIngest && (!principal || principal.role !== "admin" || !canAccessSpace(principal, huddle.spaceId))) return reply.status(403).send({ error: "Transcript ingest access denied" });
     if (huddle.status !== "completed") return reply.status(409).send({ error: "Complete the Huddle before indexing its transcript" });
@@ -132,8 +132,10 @@ export async function buildApp() {
   app.post("/v1/speak", async (request, reply) => {
     const parsed = speakSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: "Invalid Speak payload" });
+    const principal = await principalFrom(request);
+    if (!principal) return reply.status(401).send({ error: "Authentication required" });
     const now = new Date().toISOString();
-    const received: AuditEvent = { id: crypto.randomUUID(), action: "speak_received", actorId: parsed.data.actorId, occurredAt: now, reversible: false, metadata: { textLength: String(parsed.data.text.length) } };
+    const received: AuditEvent = { id: crypto.randomUUID(), action: "speak_received", actorId: principal.id, occurredAt: now, reversible: false, metadata: { textLength: String(parsed.data.text.length) } };
     const routed: AuditEvent = { id: crypto.randomUUID(), action: "routing_decided", actorId: "ai", occurredAt: now, reversible: true, metadata: { destination: "Product / Refund policy", confidence: "medium" } };
     await store.addAuditEvent(routed);
     await store.addAuditEvent(received);

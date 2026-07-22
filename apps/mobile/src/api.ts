@@ -5,7 +5,7 @@ const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8787";
 export async function speak(text: string): Promise<SpeakResponse> {
   const response = await fetch(`${apiBaseUrl}/v1/speak`, {
     method: "POST", headers: { "content-type": "application/json", "x-hyojo-actor": "toru" },
-    body: JSON.stringify({ text, actorId: "toru" })
+    body: JSON.stringify({ text })
   });
   if (!response.ok) throw new Error("Speak request failed");
   return response.json() as Promise<SpeakResponse>;

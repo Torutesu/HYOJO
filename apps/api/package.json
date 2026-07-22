@@ -14,6 +14,7 @@
     "@hyojo/adaptive-ui": "*",
     "@hyojo/domain": "*",
     "fastify": "^5.6.0",
+    "jose": "^6.2.4",
     "livekit-server-sdk": "^2.17.0",
     "postgres": "^3.4.9",
     "zod": "^4.1.0"

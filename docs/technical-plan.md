@@ -47,3 +47,7 @@ Ending a Huddle stops server-side recording immediately, but does not manufactur
 ## Postgres persistence
 
 Set `DATABASE_URL` to use the durable repository. Apply `apps/api/migrations/001_initial.sql` before starting the API. Without `DATABASE_URL`, the API deliberately uses the in-memory store for local prototype work only; no state survives a restart.
+
+## Authentication boundary
+
+Local development defaults to `HYOJO_AUTH_MODE=development`, which accepts the documented `x-hyojo-actor` fixtures. Production must set `HYOJO_AUTH_MODE=production` and `HYOJO_JWT_SECRET`; requests then require an HS256 Bearer JWT containing `sub`, `role` (`admin` or `member`), and `space_ids` (or `spaces`) string-array claims. Optional issuer and audience checks are enabled with `HYOJO_JWT_ISSUER` and `HYOJO_JWT_AUDIENCE`. Actor IDs from request bodies are never trusted.
