@@ -3,7 +3,7 @@ import { Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "reac
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import type { Narration } from "@hyojo/domain";
-import { listHuddles, speak, type HuddleListItem } from "../src/api";
+import { approveSurface, listHuddles, speak, type HuddleListItem } from "../src/api";
 
 const initial: Narration = {
   id: "morning", greeting: "おはよう、Toru。", title: "今、決めると前に進むことがひとつあります。",
@@ -25,6 +25,12 @@ export default function Home() {
     try { const result = await speak(draft); setNarration(result.narration); setDraft(""); setStatus("届けました。次に必要なことをまとめています。"); }
     catch { setStatus("接続できませんでした。APIを起動して、もう一度話してください。"); }
   }
+  async function approveAndOpenHuddle() {
+    const surface = narration.surface;
+    if (!surface || surface.kind !== "approval") return;
+    try { setStatus("判断を記録しています…"); await approveSurface(surface.id); router.push("/huddle"); }
+    catch { setStatus("判断を記録できませんでした。接続を確認して、もう一度試してください。"); }
+  }
 
   return <SafeAreaView style={styles.screen}>
     <StatusBar style="dark" />
@@ -37,7 +43,7 @@ export default function Home() {
         <Text style={styles.cardLabel}>AI が今の判断用にまとめました</Text>
         <Text style={styles.cardTitle}>{narration.surface.title}</Text>
         <Text style={styles.rationale}>{narration.surface.rationale}</Text>
-        <View style={styles.actions}><Pressable onPress={() => router.push("/huddle")} style={styles.primary}><Text style={styles.primaryText}>{narration.surface.primaryLabel}</Text></Pressable><Pressable style={styles.secondary}><Text>{narration.surface.secondaryLabel}</Text></Pressable></View>
+        <View style={styles.actions}><Pressable onPress={approveAndOpenHuddle} style={styles.primary}><Text style={styles.primaryText}>{narration.surface.primaryLabel}</Text></Pressable><Pressable style={styles.secondary}><Text>{narration.surface.secondaryLabel}</Text></Pressable></View>
       </View>}
       {huddles.length > 0 && <View style={styles.history}><Text style={styles.historyTitle}>最近のHuddle</Text>{huddles.map((huddle) => <Pressable key={huddle.id} onPress={() => router.push({ pathname: huddle.status === "completed" ? "/huddle/[id]/result" : "/huddle/[id]", params: { id: huddle.id } })} style={styles.historyRow}><View><Text style={styles.historyName}>{huddle.title}</Text><Text style={styles.historyMeta}>{huddle.transcript.state === "received" ? "記録を確認できます" : huddle.status === "completed" ? "文字起こしを処理中" : "進行中のHuddle"}</Text></View><Text style={styles.chevron}>›</Text></Pressable>)}</View>}
       <Text style={styles.status}>{status}</Text>

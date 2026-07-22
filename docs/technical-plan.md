@@ -12,7 +12,7 @@
 1. `POST /v1/speak` accepts an unfiled utterance.
 2. The API emits an audit event and returns an AI narration card.
 3. The mobile Home screen renders the narration and a safe Adaptive Surface.
-4. An approval emits an audit event and becomes durable domain state in a later persistence phase.
+4. An approval emits a durable audit event under the acting user's identity before the follow-up Huddle begins.
 
 ## Next infrastructure increments
 

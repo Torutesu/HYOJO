@@ -39,6 +39,15 @@ export async function buildApp() {
   });
   app.addHook("onClose", async () => { await store.close(); });
   app.get("/v1/audit-events", async () => ({ events: await store.listAuditEvents() }));
+  app.post("/v1/approvals/:id/approve", async (request, reply) => {
+    const principal = await principalFrom(request);
+    if (!principal) return reply.status(401).send({ error: "Authentication required" });
+    const { id } = request.params as { id: string };
+    if (!id.trim()) return reply.status(400).send({ error: "Approval id is required" });
+    const event: AuditEvent = { id: crypto.randomUUID(), action: "surface_approved", actorId: principal.id, occurredAt: new Date().toISOString(), reversible: true, metadata: { surfaceId: id } };
+    await store.addAuditEvent(event);
+    return { approval: { id, approvedBy: principal.id, approvedAt: event.occurredAt }, auditEvent: event };
+  });
   app.get("/v1/huddles", async (request, reply) => {
     const principal = await principalFrom(request);
     if (!principal) return reply.status(401).send({ error: "Authentication required" });

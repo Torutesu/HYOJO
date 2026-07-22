@@ -11,6 +11,12 @@ export async function speak(text: string): Promise<SpeakResponse> {
   return response.json() as Promise<SpeakResponse>;
 }
 
+export async function approveSurface(id: string) {
+  const response = await fetch(`${apiBaseUrl}/v1/approvals/${encodeURIComponent(id)}/approve`, { method: "POST", headers: { "x-hyojo-actor": "toru" } });
+  if (!response.ok) throw new Error("Approval could not be recorded");
+  return response.json() as Promise<{ approval: { id: string } }>;
+}
+
 export async function createHuddle() {
   const response = await fetch(`${apiBaseUrl}/v1/huddles`, { method: "POST", headers: { "content-type": "application/json", "x-hyojo-actor": "toru" }, body: JSON.stringify({ title: "返金ポリシーを決める", participants: ["toru", "sarah"], spaceId: "product", recordingPolicy: "required" }) });
   if (!response.ok) throw new Error("Huddle request failed");

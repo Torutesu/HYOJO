@@ -7,6 +7,8 @@ const response = await app.inject({ method: "POST", url: "/v1/speak", headers: {
 if (response.statusCode !== 200) throw new Error(`Speak failed: ${response.statusCode}`);
 const payload = response.json();
 if (payload.narration?.surface?.kind !== "approval" || payload.auditEvents?.length !== 2) throw new Error("Unexpected Speak response");
+const approval = await app.inject({ method: "POST", url: "/v1/approvals/refund-48h/approve", headers: { "x-hyojo-actor": "toru" } });
+if (approval.statusCode !== 200 || approval.json().auditEvent.action !== "surface_approved") throw new Error("Approval audit failed");
 const expiringPolicy = await app.inject({ method: "PATCH", url: "/v1/spaces/product/recording-policy", headers: { "x-hyojo-actor": "toru" }, payload: { mode: "required", videoRetentionDays: 30, transcriptRetentionDays: 0, allowMemoryIndexing: true } });
 if (expiringPolicy.statusCode !== 200) throw new Error("Retention policy setup failed");
 const proposed = await app.inject({ method: "POST", url: "/v1/huddles", headers: { "x-hyojo-actor": "toru" }, payload: { title: "返金ポリシーを決める", participants: ["toru", "sarah"], spaceId: "product", recordingPolicy: "required" } });
