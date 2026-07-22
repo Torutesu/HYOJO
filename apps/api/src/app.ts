@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import { z } from "zod";
 import { isAllowedSurface } from "@hyojo/adaptive-ui";
 import type { AuditEvent, Huddle, HuddleMemory, RecordingPolicy, SpeakResponse } from "@hyojo/domain";
+import { createRecordingProvider } from "./recording.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -11,6 +12,7 @@ export async function buildApp() {
   const events: AuditEvent[] = [];
   const huddles = new Map<string, Huddle>();
   const memories = new Map<string, HuddleMemory>();
+  const recordingProvider = createRecordingProvider();
   const speakSchema = z.object({ text: z.string().trim().min(1).max(2_000), actorId: z.string().min(1) });
   const huddleSchema = z.object({ title: z.string().trim().min(1).max(160), participants: z.array(z.string().min(1)).min(1), spaceId: z.string().min(1), recordingPolicy: z.enum(["required", "optional", "off"]).default("required") });
   const completeSchema = z.object({ transcript: z.string().trim().min(1).max(50_000) });
@@ -32,11 +34,27 @@ export async function buildApp() {
       id: crypto.randomUUID(), spaceId: parsed.data.spaceId, title: parsed.data.title, participants: parsed.data.participants,
       status: policy.mode === "off" ? "recording_off" : "proposed", recordingPolicy: policy,
       recordingDisclosure: policy.mode === "off" ? "このハドルは記録されません。" : "録画・文字起こし中。参加者全員に表示されます。",
+      recording: { provider: policy.mode === "off" ? "none" : recordingProvider.name, state: "not_started" },
       createdAt: now
     };
     huddles.set(huddle.id, huddle);
     events.unshift({ id: crypto.randomUUID(), action: "huddle_recording_started", actorId: "ai", occurredAt: now, reversible: true, metadata: { huddleId: huddle.id, recordingMode: policy.mode } });
     return reply.status(201).send({ huddle });
+  });
+  app.post("/v1/huddles/:id/join", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const huddle = huddles.get(id);
+    if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
+    if (huddle.status === "proposed" && huddle.recordingPolicy.mode !== "off") {
+      try {
+        const recording = await recordingProvider.start(huddle);
+        huddle.recording = { provider: recording.provider, state: "recording", externalId: recording.externalId };
+      } catch (error) {
+        return reply.status(503).send({ error: error instanceof Error ? error.message : "Recording provider unavailable" });
+      }
+    }
+    huddle.status = huddle.recordingPolicy.mode === "off" ? "recording_off" : "active";
+    return { huddle };
   });
   app.post("/v1/huddles/:id/complete", async (request, reply) => {
     const { id } = request.params as { id: string };
@@ -45,6 +63,7 @@ export async function buildApp() {
     const parsed = completeSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: "Invalid completion payload" });
     huddle.status = "completed";
+    if (huddle.recording.state === "recording") { await recordingProvider.stop(huddle.recording.externalId); huddle.recording.state = "stopped"; }
     // The summarizer seam deliberately receives transcript text only. Video stays evidence, not AI context.
     const memory: HuddleMemory = { huddleId: id, summary: "Sarahが48時間案に合意。残る論点は返金起点です。", decisions: ["決済完了から48時間以内は全額返金"], todos: [{ owner: "AI", text: "CSマニュアルの更新依頼を送る" }], source: "transcript", createdAt: new Date().toISOString() };
     if (huddle.recordingPolicy.allowMemoryIndexing) memories.set(id, memory);

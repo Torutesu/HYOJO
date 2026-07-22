@@ -43,6 +43,7 @@ export type Huddle = {
   status: HuddleStatus;
   recordingPolicy: RecordingPolicy;
   recordingDisclosure: string;
+  recording: { provider: "memory" | "livekit" | "none"; state: "not_started" | "recording" | "stopped"; externalId?: string };
   createdAt: string;
 };
 

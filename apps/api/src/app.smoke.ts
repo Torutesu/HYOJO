@@ -8,7 +8,9 @@ if (payload.narration?.surface?.kind !== "approval" || payload.auditEvents?.leng
 const proposed = await app.inject({ method: "POST", url: "/v1/huddles", payload: { title: "返金ポリシーを決める", participants: ["toru", "sarah"], spaceId: "product", recordingPolicy: "required" } });
 if (proposed.statusCode !== 201 || proposed.json().huddle.status !== "proposed") throw new Error("Huddle proposal failed");
 const huddleId = proposed.json().huddle.id;
+const joined = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/join` });
+if (joined.statusCode !== 200 || joined.json().huddle.recording.state !== "recording") throw new Error("Huddle recording start failed");
 const completed = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/complete`, payload: { transcript: "Sarah agrees to a full refund within 48 hours from checkout." } });
-if (completed.statusCode !== 200 || completed.json().memory?.source !== "transcript") throw new Error("Huddle memory failed");
+if (completed.statusCode !== 200 || completed.json().memory?.source !== "transcript" || completed.json().huddle.recording.state !== "stopped") throw new Error("Huddle memory failed");
 console.log("Speak smoke test passed");
 await app.close();
