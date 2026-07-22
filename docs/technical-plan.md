@@ -65,3 +65,5 @@ Local development defaults to `HYOJO_AUTH_MODE=development`, which accepts the d
 ## Optional AI narration
 
 Speak defaults to a deterministic mock response so local development has no model cost. To use the OpenAI Responses API server-side, explicitly set `HYOJO_NARRATION_PROVIDER=openai`, `OPENAI_API_KEY`, and `OPENAI_MODEL`. The response is requested as a bounded JSON schema, parsed and length-validated, then attached only to HYOJO's allow-listed Adaptive Surface. Requests set `store: false`; API keys never enter mobile or Admin environment variables. See the [OpenAI Responses quickstart](https://platform.openai.com/docs/quickstart/make-your-first-api-request).
+
+Set `HYOJO_MEMORY_PROVIDER=openai` to apply the same server-side, structured-output boundary to Huddle transcripts. Only transcript text reaches the model; the supplied summary, decisions, and TODOs are schema-validated before entering Institutional Memory. With the default `mock` provider, worker-supplied decisions and TODOs are retained without any model call.

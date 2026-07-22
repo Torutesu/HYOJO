@@ -9,6 +9,7 @@ import { createLiveKitConnection } from "./livekit.js";
 import { createStore } from "./store.js";
 import { expireHuddleRecords } from "./retention.js";
 import { generateNarration } from "./narration.js";
+import { generateHuddleMemory } from "./memory.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -168,7 +169,8 @@ export async function buildApp() {
     await store.saveTranscript(transcript);
     huddle.transcript = { state: "received", receivedAt: transcript.receivedAt };
     // Video remains evidence. Only transcript text is allowed into the memory generation seam.
-    const memory: HuddleMemory = { huddleId: id, summary: transcript.text.slice(0, 500), decisions: parsed.data.decisions, todos: parsed.data.todos, source: "transcript", createdAt: transcript.receivedAt };
+    const draft = await generateHuddleMemory({ transcript: transcript.text, decisions: parsed.data.decisions, todos: parsed.data.todos });
+    const memory: HuddleMemory = { huddleId: id, ...draft, source: "transcript", createdAt: transcript.receivedAt };
     await store.saveHuddle(huddle);
     await store.saveMemory(memory);
     await store.addAuditEvent({ id: crypto.randomUUID(), action: "huddle_transcript_received", actorId: trustedIngest ? "transcript-worker" : principal!.id, occurredAt: transcript.receivedAt, reversible: false, metadata: { huddleId: id, language: transcript.language ?? "und", spaceId: huddle.spaceId } });
