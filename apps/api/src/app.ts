@@ -67,9 +67,24 @@ export async function buildApp() {
     const huddles = (await store.listHuddles()).filter((huddle) => canAccessSpace(principal, huddle.spaceId));
     const items = (await Promise.all(huddles.map(async (huddle) => {
       const memory = await store.getMemory(huddle.id);
-      return (memory?.todos ?? []).map((todo) => ({ huddleId: huddle.id, huddleTitle: huddle.title, owner: todo.owner, text: todo.text }));
+      return (memory?.todos ?? []).filter((todo) => !todo.completedAt).map((todo) => ({ huddleId: huddle.id, huddleTitle: huddle.title, owner: todo.owner, text: todo.text }));
     }))).flat();
     return { items };
+  });
+  app.post("/v1/huddles/:id/todos/complete", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const huddle = await store.getHuddle(id);
+    const principal = await principalFrom(request);
+    if (!huddle || !principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
+    const parsed = z.object({ owner: z.string().min(1), text: z.string().min(1) }).safeParse(request.body);
+    const memory = await store.getMemory(id);
+    if (!parsed.success || !memory) return reply.status(404).send({ error: "Action item not found" });
+    const todo = memory.todos.find((item) => item.owner === parsed.data.owner && item.text === parsed.data.text);
+    if (!todo) return reply.status(404).send({ error: "Action item not found" });
+    todo.completedAt ??= new Date().toISOString();
+    await store.saveMemory(memory);
+    await store.addAuditEvent({ id: crypto.randomUUID(), action: "routing_decided", actorId: principal.id, occurredAt: todo.completedAt, reversible: true, metadata: { operation: "action_item_completed", huddleId: id, spaceId: huddle.spaceId } });
+    return { todo };
   });
   app.get("/v1/spaces/:spaceId/recording-policy", async (request, reply) => {
     const principal = await principalFrom(request); const { spaceId } = request.params as { spaceId: string };

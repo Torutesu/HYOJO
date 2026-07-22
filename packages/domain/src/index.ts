@@ -62,7 +62,7 @@ export type HuddleMemory = {
   huddleId: string;
   summary: string;
   decisions: string[];
-  todos: Array<{ owner: string; text: string }>;
+  todos: Array<{ owner: string; text: string; completedAt?: string }>;
   source: "transcript" | "manual";
   createdAt: string;
 };

@@ -67,3 +67,8 @@ export async function listActionItems() {
   if (!response.ok) throw new Error("Action items could not be loaded");
   return response.json() as Promise<{ items: ActionItem[] }>;
 }
+
+export async function completeActionItem(huddleId: string, owner: string, text: string) {
+  const response = await fetch(`${apiBaseUrl}/v1/huddles/${huddleId}/todos/complete`, { method: "POST", headers: { "content-type": "application/json", "x-hyojo-actor": "toru" }, body: JSON.stringify({ owner, text }) });
+  if (!response.ok) throw new Error("Action item could not be completed");
+}
