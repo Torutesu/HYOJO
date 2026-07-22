@@ -16,6 +16,9 @@ if (proposed.statusCode !== 201 || proposed.json().huddle.status !== "proposed")
 const huddleId = proposed.json().huddle.id;
 const listed = await app.inject({ method: "GET", url: "/v1/huddles", headers: { "x-hyojo-actor": "toru" } });
 if (listed.statusCode !== 200 || !listed.json().huddles.some((huddle: { id: string }) => huddle.id === huddleId)) throw new Error("Huddle list failed");
+const cancellable = await app.inject({ method: "POST", url: "/v1/huddles", headers: { "x-hyojo-actor": "toru" }, payload: { title: "取り消すハドル", participants: ["toru"], spaceId: "product", recordingPolicy: "required" } });
+const cancelled = await app.inject({ method: "POST", url: `/v1/huddles/${cancellable.json().huddle.id}/cancel`, headers: { "x-hyojo-actor": "toru" } });
+if (cancelled.statusCode !== 204) throw new Error("Huddle cancellation failed");
 const joined = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/join`, headers: { "x-hyojo-actor": "toru" } });
 if (joined.statusCode !== 200 || joined.json().huddle.recording.state !== "recording") throw new Error("Huddle recording start failed");
 const unavailableToken = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/token`, headers: { "x-hyojo-actor": "toru" } });

@@ -111,6 +111,17 @@ export async function buildApp() {
     await store.saveHuddle(huddle);
     return { huddle };
   });
+  app.post("/v1/huddles/:id/cancel", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const huddle = await store.getHuddle(id);
+    if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
+    const principal = await principalFrom(request);
+    if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
+    if (huddle.status !== "proposed") return reply.status(409).send({ error: "Only an unjoined Huddle can be cancelled" });
+    await store.deleteHuddle(id);
+    await store.addAuditEvent({ id: crypto.randomUUID(), action: "routing_decided", actorId: principal.id, occurredAt: new Date().toISOString(), reversible: true, metadata: { operation: "huddle_cancelled_before_consent", huddleId: id, spaceId: huddle.spaceId } });
+    return reply.status(204).send();
+  });
   app.post("/v1/huddles/:id/token", async (request, reply) => {
     const { id } = request.params as { id: string };
     const huddle = await store.getHuddle(id);

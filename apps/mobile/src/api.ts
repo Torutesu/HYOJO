@@ -29,6 +29,11 @@ export async function joinHuddle(id: string) {
   return response.json() as Promise<{ huddle: { id: string; recordingDisclosure: string } }>;
 }
 
+export async function cancelHuddle(id: string) {
+  const response = await fetch(`${apiBaseUrl}/v1/huddles/${id}/cancel`, { method: "POST", headers: { "x-hyojo-actor": "toru" } });
+  if (!response.ok) throw new Error("Huddle cancellation failed");
+}
+
 export async function getHuddleConnection(id: string) {
   const response = await fetch(`${apiBaseUrl}/v1/huddles/${id}/token`, { method: "POST", headers: { "x-hyojo-actor": "toru" } });
   if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "LiveKit connection failed");
