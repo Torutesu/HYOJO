@@ -2,7 +2,25 @@
   "name": "@hyojo/mobile",
   "private": true,
   "main": "expo-router/entry",
-  "scripts": { "start": "expo start --dev-client", "typecheck": "tsc --noEmit" },
-  "dependencies": { "@hyojo/domain": "*", "expo": "^54.0.0", "expo-router": "^6.0.0", "expo-status-bar": "~3.0.8", "react": "19.1.0", "react-native": "0.81.0" },
-  "devDependencies": { "@types/react": "~19.1.10", "typescript": "~5.9.2" }
+  "scripts": {
+    "start": "expo start --dev-client",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@config-plugins/react-native-webrtc": "^13.0.0",
+    "@hyojo/domain": "*",
+    "@livekit/react-native": "^2.11.1",
+    "@livekit/react-native-expo-plugin": "^1.0.2",
+    "@livekit/react-native-webrtc": "^144.1.1",
+    "expo": "^54.0.0",
+    "expo-router": "^6.0.0",
+    "expo-status-bar": "~3.0.8",
+    "livekit-client": "^2.20.2",
+    "react": "19.1.0",
+    "react-native": "0.81.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.2"
+  }
 }

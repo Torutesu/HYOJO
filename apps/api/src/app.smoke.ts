@@ -10,6 +10,8 @@ if (proposed.statusCode !== 201 || proposed.json().huddle.status !== "proposed")
 const huddleId = proposed.json().huddle.id;
 const joined = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/join`, headers: { "x-hyojo-actor": "toru" } });
 if (joined.statusCode !== 200 || joined.json().huddle.recording.state !== "recording") throw new Error("Huddle recording start failed");
+const unavailableToken = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/token`, headers: { "x-hyojo-actor": "toru" } });
+if (unavailableToken.statusCode !== 503 || !unavailableToken.json().error?.includes("LiveKit connection is not configured")) throw new Error("LiveKit configuration boundary failed");
 const completed = await app.inject({ method: "POST", url: `/v1/huddles/${huddleId}/complete`, headers: { "x-hyojo-actor": "toru" }, payload: { transcript: "Sarah agrees to a full refund within 48 hours from checkout." } });
 if (completed.statusCode !== 200 || completed.json().memory?.source !== "transcript" || completed.json().huddle.recording.state !== "stopped") throw new Error("Huddle memory failed");
 const forbidden = await app.inject({ method: "GET", url: "/v1/spaces/product/recording-policy", headers: { "x-hyojo-actor": "unknown" } });

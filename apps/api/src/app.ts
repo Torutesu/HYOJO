@@ -5,6 +5,7 @@ import { isAllowedSurface } from "@hyojo/adaptive-ui";
 import type { AuditEvent, Huddle, HuddleMemory, RecordingPolicy, SpeakResponse } from "@hyojo/domain";
 import { createRecordingProvider } from "./recording.js";
 import { canAccessSpace, principalFrom } from "./access.js";
+import { createLiveKitConnection } from "./livekit.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -74,6 +75,19 @@ export async function buildApp() {
     }
     huddle.status = huddle.recordingPolicy.mode === "off" ? "recording_off" : "active";
     return { huddle };
+  });
+  app.post("/v1/huddles/:id/token", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const huddle = huddles.get(id);
+    if (!huddle) return reply.status(404).send({ error: "Huddle not found" });
+    const principal = principalFrom(request); if (!principal || !canAccessSpace(principal, huddle.spaceId)) return reply.status(403).send({ error: "Space access denied" });
+    if (huddle.status === "proposed") return reply.status(409).send({ error: "Join the Huddle before requesting a connection token" });
+    if (huddle.status === "completed") return reply.status(409).send({ error: "This Huddle has already ended" });
+    try {
+      return { connection: await createLiveKitConnection({ room: huddle.id, identity: principal.id }) };
+    } catch (error) {
+      return reply.status(503).send({ error: error instanceof Error ? error.message : "LiveKit connection unavailable" });
+    }
   });
   app.post("/v1/huddles/:id/complete", async (request, reply) => {
     const { id } = request.params as { id: string };

@@ -16,3 +16,15 @@ export async function createHuddle() {
   if (!response.ok) throw new Error("Huddle request failed");
   return response.json() as Promise<{ huddle: { id: string; recordingDisclosure: string } }>;
 }
+
+export async function joinHuddle(id: string) {
+  const response = await fetch(`${apiBaseUrl}/v1/huddles/${id}/join`, { method: "POST", headers: { "x-hyojo-actor": "toru" } });
+  if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "Huddle join failed");
+  return response.json() as Promise<{ huddle: { id: string; recordingDisclosure: string } }>;
+}
+
+export async function getHuddleConnection(id: string) {
+  const response = await fetch(`${apiBaseUrl}/v1/huddles/${id}/token`, { method: "POST", headers: { "x-hyojo-actor": "toru" } });
+  if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "LiveKit connection failed");
+  return response.json() as Promise<{ connection: { serverUrl: string; token: string } }>;
+}
